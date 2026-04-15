@@ -8,10 +8,16 @@ from sqlmodel import SQLModel, Field, JSON, Column
 
 
 class User(SQLModel, table=True):
-    """Single-user MVP — but schema supports multi-user for future."""
+    """User account — same row works for single-user PIN and multi-user OAuth modes."""
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     name: str = "You"
+    # Identity — populated when AUTH_MODE=oauth; unique when set.
+    email: Optional[str] = Field(default=None, index=True, unique=True)
+    oauth_provider: Optional[str] = None  # 'google' | None
+    oauth_sub: Optional[str] = Field(default=None, index=True)
+    avatar_url: Optional[str] = None
+
     birthdate: Optional[date] = None
     sex: Optional[str] = None  # 'M' | 'F' | 'other'
     height_cm: Optional[float] = None

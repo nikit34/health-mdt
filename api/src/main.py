@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings
 from .db import init_db
@@ -43,6 +44,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# SessionMiddleware — required by authlib for OAuth state/nonce handling
+_settings = get_settings()
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_settings.session_secret or "dev-only-insecure-secret-change-me",
+    same_site="lax",
+    https_only=_settings.domain != "localhost",
 )
 
 # Routers

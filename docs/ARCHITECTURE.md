@@ -66,14 +66,18 @@
 - заметки о пробелах в данных.
 
 ### 3. Agents (`agents/registry.py`)
-- 4 **специалиста** (Cardiologist, Endocrinologist, Nutritionist, Psychiatrist/Psychologist) —
-  каждый с системным промптом по своей методологии (ESC, ADA, EFSA, biopsychosocial).
+- 9 **специалистов**: Cardiologist (ESC), Endocrinologist (ADA), Nutritionist (EFSA),
+  Psychiatrist (biopsychosocial), Oncologist (ESMO/NCCN), Gastroenterologist (Rome IV/AASLD),
+  Hematologist (ASH/WHO), Nephrologist (KDIGO), Pulmonologist (GOLD/GINA/USPSTF).
 - 4 **lifestyle** агента (Sleep, Movement, Stress/HRV, Recovery) — ежедневные короткие ноты.
 - **GP** — координирующий слой, методология RCGP: SOAP, watchful waiting, safety net.
 
 ### 4. Orchestration (`agents/orchestrator.py`)
-- **MDT consilium**: lifestyle → specialists (parallel) → PubMed → GP synthesis.
+- **MDT consilium**: lifestyle → specialists (parallel, 9 workers) → PubMed + Semantic Scholar
+  (параллельно в своём пуле) → GP synthesis.
 - **Daily brief**: lifestyle → GP (4-7 предложений).
+- **Streaming chat** (`routes/chat.py`): GP отвечает через `messages.stream()`, SSE
+  из sse-starlette, буферинг отключён в Caddy (`flush_interval -1`).
 - LLM вызовы кэшируются на уровне system prompt (`cache_control: ephemeral`) —
   стабильная часть промпта (методология + роль) даёт ~90% экономии на повторах.
 
@@ -88,6 +92,18 @@
 - **Daily brief** — короткий бриф GP, утром 06:30.
 - **Weekly MDT** — полный консилиум, воскресенье 08:00.
 - **Ad-hoc** — по кнопке в вебе или `/report` в боте.
+- **PDF для врача** (`reports/pdf_export.py`) — WeasyPrint рендерит A4 с типографикой
+  под печать: пациент → проблем-лист → GP-синтез → safety net → ноты специалистов
+  (с SOAP-развёрткой) → PubMed-ссылки → дисклеймер. Никаких emoji/ярких цветов.
+
+### 7. Auth modes
+- **PIN** (дефолт): `ACCESS_PIN` в `.env`, in-memory session store, токен в `localStorage`.
+  QR deep-link `/#pin=XXXXXX` для мгновенного авто-логина с телефона.
+- **OAuth Google** (`AUTH_MODE=oauth`): authlib + starlette SessionMiddleware для OIDC-потока,
+  подписанные cookies через itsdangerous (`SESSION_SECRET` персистится в `data/session_secret`),
+  allowlist email-ов через `OAUTH_ALLOWED_EMAILS`.
+- Все routes унифицированы через `auth_deps.get_current_user()` — user scoping работает
+  одинаково в обоих режимах, миграция между ними — без изменения кода роутов.
 
 ## Decisions & trade-offs
 

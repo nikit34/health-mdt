@@ -45,41 +45,45 @@ def shutdown_scheduler(sched: BackgroundScheduler) -> None:
         log.warning("Scheduler shutdown error: %s", e)
 
 
+def _for_each_user(fn) -> None:
+    """Helper: iterate all users (single-user in PIN mode, multi in OAuth)."""
+    with Session(engine) as s:
+        users = s.exec(select(User)).all()
+        for user in users:
+            try:
+                fn(s, user)
+            except Exception as e:
+                log.exception("Scheduled job failed for user %s: %s", user.id, e)
+
+
 def _daily_sync_and_brief() -> None:
     settings = get_settings()
     if not settings.has_llm:
         log.info("Skip daily brief — no LLM key")
         return
-    with Session(engine) as s:
-        user = s.exec(select(User)).first()
-        if not user:
-            return
+
+    def _job(s, user):
         if settings.has_oura:
             try:
                 fetch_oura_daily(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
             except Exception as e:
                 log.warning("Daily Oura sync failed: %s", e)
-        try:
-            brief = generate_daily_brief(s, user)
-            log.info("Daily brief created: id=%s", brief.id)
-            # Telegram notify handled elsewhere (bot polls /reports/brief/latest)
-        except Exception as e:
-            log.exception("Daily brief failed: %s", e)
+        brief = generate_daily_brief(s, user)
+        log.info("Daily brief created for user %s: id=%s", user.id, brief.id)
+
+    _for_each_user(_job)
 
 
 def _weekly_mdt() -> None:
     settings = get_settings()
     if not settings.has_llm:
         return
-    with Session(engine) as s:
-        user = s.exec(select(User)).first()
-        if not user:
-            return
-        try:
-            report = run_mdt_consilium(s, user, kind="weekly", window_days=7)
-            log.info("Weekly MDT created: id=%s", report.id)
-        except Exception as e:
-            log.exception("Weekly MDT failed: %s", e)
+
+    def _job(s, user):
+        report = run_mdt_consilium(s, user, kind="weekly", window_days=7)
+        log.info("Weekly MDT created for user %s: id=%s", user.id, report.id)
+
+    _for_each_user(_job)
 
 
 def _task_followup() -> None:
@@ -109,11 +113,8 @@ def _oura_only() -> None:
     settings = get_settings()
     if not settings.has_oura:
         return
-    with Session(engine) as s:
-        user = s.exec(select(User)).first()
-        if not user:
-            return
-        try:
-            fetch_oura_daily(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
-        except Exception as e:
-            log.warning("Scheduled Oura sync failed: %s", e)
+
+    def _job(s, user):
+        fetch_oura_daily(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
+
+    _for_each_user(_job)

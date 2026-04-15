@@ -24,6 +24,7 @@ from sqlmodel import Session, select
 
 from ..db import Brief, MdtReport, PubmedEvidence, Task, User
 from ..integrations.pubmed import fetch_pubmed_evidence
+from ..integrations.semantic_scholar import fetch_scholar_evidence
 from .base import Agent, AgentResponse
 from .context import build_context
 from .registry import GP_AGENT, LIFESTYLE_AGENTS, MDT_SPECIALISTS
@@ -31,7 +32,7 @@ from .registry import GP_AGENT, LIFESTYLE_AGENTS, MDT_SPECIALISTS
 log = logging.getLogger(__name__)
 
 
-def _run_parallel(agents: list[Agent], payload: dict, max_workers: int = 4) -> list[AgentResponse]:
+def _run_parallel(agents: list[Agent], payload: dict, max_workers: int = 9) -> list[AgentResponse]:
     """Run agents concurrently. LLM calls are I/O-bound so threads are fine."""
     results: list[AgentResponse] = []
     with cf.ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -74,22 +75,36 @@ def run_mdt_consilium(
     # Step 2: specialists — get context + lifestyle notes
     specialist_notes = _run_parallel(MDT_SPECIALISTS, ctx_dict)
 
-    # Step 3: PubMed evidence
+    # Step 3: Evidence grounding — PubMed + Semantic Scholar in parallel
     all_queries: set[str] = set()
     for r in specialist_notes:
         all_queries.update(r.evidence_queries[:2])  # cap per agent
+    queries_list = list(all_queries)[:8]
     pmids: list[str] = []
-    if fetch_evidence and all_queries:
-        try:
-            evidence_map = fetch_pubmed_evidence(list(all_queries)[:6], session=session)
-            for pmid_list in evidence_map.values():
-                pmids.extend(pmid_list)
-            # Attach pmids back to specialists whose queries hit
-            for r in specialist_notes:
-                for q in r.evidence_queries:
-                    r.evidence_pmids.extend(evidence_map.get(q, []))
-        except Exception as e:
-            log.warning("PubMed fetch failed (continuing): %s", e)
+    scholar_records: list[dict] = []
+    if fetch_evidence and queries_list:
+        pubmed_map: dict[str, list[str]] = {}
+        scholar_map: dict[str, list[dict]] = {}
+        with cf.ThreadPoolExecutor(max_workers=2) as pool:
+            fut_pm = pool.submit(fetch_pubmed_evidence, queries_list, session=session)
+            fut_ss = pool.submit(fetch_scholar_evidence, queries_list, session=session)
+            try:
+                pubmed_map = fut_pm.result(timeout=30)
+            except Exception as e:
+                log.warning("PubMed fetch failed: %s", e)
+            try:
+                scholar_map = fut_ss.result(timeout=30)
+            except Exception as e:
+                log.warning("Semantic Scholar fetch failed: %s", e)
+
+        for pmid_list in pubmed_map.values():
+            pmids.extend(pmid_list)
+        for records in scholar_map.values():
+            scholar_records.extend(records)
+        # Attach pmids back to specialists whose queries hit
+        for r in specialist_notes:
+            for q in r.evidence_queries:
+                r.evidence_pmids.extend(pubmed_map.get(q, []))
 
     # Step 4: GP synthesis — collate everything
     gp_payload = {
@@ -107,6 +122,10 @@ def run_mdt_consilium(
             }
             for r in specialist_notes
         ],
+        "scholar_evidence": [
+            {"title": s["title"], "venue": s.get("journal"), "year": s.get("year"), "citations": s.get("citations", 0)}
+            for s in scholar_records[:10]
+        ],
         "instruction": (
             f"Составь {kind} GP-отчёт. Верни JSON по схеме из system-промпта "
             "(gp_synthesis, problem_list, plan, safety_net, evidence_pmids). "
@@ -119,6 +138,11 @@ def run_mdt_consilium(
     gp_parsed = _parse_gp_output(gp_response)
 
     # Step 5: persist
+    # Merge evidence: PubMed PMIDs + Scholar records (stored as PMID when available, or SS-URL)
+    scholar_refs = [s for s in scholar_records if s.get("title")]
+    all_evidence_keys = list(dict.fromkeys(
+        pmids + gp_parsed.get("evidence_pmids", []) + [s["pmid"] for s in scholar_refs if s.get("pmid")]
+    ))
     report = MdtReport(
         user_id=user.id,
         kind=kind,
@@ -137,7 +161,7 @@ def run_mdt_consilium(
         gp_synthesis=gp_parsed.get("gp_synthesis", gp_response.narrative or ""),
         problem_list=gp_parsed.get("problem_list", []),
         safety_net=gp_parsed.get("safety_net", []),
-        evidence_pmids=list(dict.fromkeys(pmids + gp_parsed.get("evidence_pmids", []))),
+        evidence_pmids=all_evidence_keys,
     )
     session.add(report)
     session.commit()

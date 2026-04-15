@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from ..auth_deps import get_current_user
 from ..db import Checkin, Metric, User
 from ..db.session import get_session
-from .auth import require_session
 
-router = APIRouter(dependencies=[Depends(require_session)])
+router = APIRouter()
 
 
 class UserUpdate(BaseModel):
@@ -26,24 +26,16 @@ class UserUpdate(BaseModel):
 
 
 @router.get("/me")
-def get_me(session: Session = Depends(get_session)) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        user = User()
-        session.add(user)
-        session.commit()
-        session.refresh(user)
+def get_me(user: User = Depends(get_current_user)) -> dict:
     return user.model_dump()
 
 
 @router.put("/me")
-def update_me(payload: UserUpdate, session: Session = Depends(get_session)) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        user = User()
-        session.add(user)
-        session.commit()
-        session.refresh(user)
+def update_me(
+    payload: UserUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(user, k, v)
     session.add(user)
@@ -63,11 +55,9 @@ class CheckinIn(BaseModel):
 @router.post("/checkin")
 def create_checkin(
     payload: CheckinIn,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        raise HTTPException(404, "user not initialized")
     c = Checkin(
         user_id=user.id,
         text=payload.text,
@@ -85,11 +75,9 @@ def create_checkin(
 @router.get("/checkins")
 def list_checkins(
     limit: int = Query(50, le=500),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[dict]:
-    user = session.exec(select(User)).first()
-    if not user:
-        return []
     rows = session.exec(
         select(Checkin).where(Checkin.user_id == user.id).order_by(Checkin.ts.desc()).limit(limit)
     ).all()
@@ -100,11 +88,9 @@ def list_checkins(
 def list_metrics(
     kind: Optional[str] = None,
     days: int = Query(30, ge=1, le=365),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        return {"series": {}}
     since = datetime.utcnow() - timedelta(days=days)
     stmt = select(Metric).where(Metric.user_id == user.id, Metric.ts >= since)
     if kind:

@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Card, Button, Pill } from "@/components/Card";
 
 type Msg = {
   role: "user" | "gp";
   text: string;
+  streaming?: boolean;
   confidence?: number;
   safety_flags?: string[];
   follow_ups?: string[];
@@ -17,33 +18,65 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => cancelRef.current?.();
+  }, []);
+
+  function stop() {
+    cancelRef.current?.();
+    cancelRef.current = null;
+    setBusy(false);
+    setHistory((h) => h.map((m, i) => (i === h.length - 1 && m.streaming ? { ...m, streaming: false } : m)));
+  }
+
+  function scroll() {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    });
+  }
 
   async function send() {
     const q = input.trim();
     if (!q) return;
     setInput("");
-    setHistory((h) => [...h, { role: "user", text: q }]);
+    setHistory((h) => [...h, { role: "user", text: q }, { role: "gp", text: "", streaming: true }]);
     setBusy(true);
-    try {
-      const resp = await api.chat.ask(q);
-      setHistory((h) => [
-        ...h,
-        {
-          role: "gp",
-          text: resp.answer,
-          confidence: resp.confidence,
-          safety_flags: resp.safety_flags,
-          follow_ups: resp.follow_ups,
-        },
-      ]);
-    } catch (e: any) {
-      setHistory((h) => [...h, { role: "gp", text: `Ошибка: ${e.message}` }]);
-    } finally {
-      setBusy(false);
-      setTimeout(() => {
-        listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-      }, 50);
-    }
+    scroll();
+
+    // Extract safety flag from final chunk (pattern: "⚠ ...")
+    cancelRef.current = api.chat.streamAsk(
+      q,
+      (chunk) => {
+        setHistory((h) => {
+          const last = h[h.length - 1];
+          if (!last || last.role !== "gp") return h;
+          return [...h.slice(0, -1), { ...last, text: last.text + chunk }];
+        });
+        scroll();
+      },
+      () => {
+        setHistory((h) => {
+          const last = h[h.length - 1];
+          if (!last) return h;
+          // Extract ⚠ safety lines from text
+          const warns = Array.from(last.text.matchAll(/⚠\s*([^\n]+)/g)).map((m) => m[1].trim());
+          return [...h.slice(0, -1), { ...last, streaming: false, safety_flags: warns }];
+        });
+        setBusy(false);
+        cancelRef.current = null;
+      },
+      (err) => {
+        setHistory((h) => {
+          const last = h[h.length - 1];
+          if (!last) return h;
+          return [...h.slice(0, -1), { ...last, text: last.text + `\n\n[ошибка: ${err}]`, streaming: false }];
+        });
+        setBusy(false);
+        cancelRef.current = null;
+      },
+    );
   }
 
   return (
@@ -75,18 +108,16 @@ export default function ChatPage() {
           ) : (
             history.map((m, i) => <Bubble key={i} msg={m} />)
           )}
-          {busy && (
-            <div className="flex items-start gap-2">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-              <span className="text-sm text-fg-muted">GP думает…</span>
-            </div>
-          )}
         </div>
         <form
           className="mt-3 flex gap-2 border-t border-border pt-3"
           onSubmit={(e) => {
             e.preventDefault();
-            send();
+            if (busy) {
+              stop();
+            } else {
+              send();
+            }
           }}
         >
           <input
@@ -94,8 +125,13 @@ export default function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Напиши вопрос…"
             className="flex-1 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm outline-none focus:border-accent"
+            disabled={busy}
           />
-          <Button type="submit" disabled={busy}>Отправить</Button>
+          {busy ? (
+            <Button type="submit" variant="ghost">Стоп</Button>
+          ) : (
+            <Button type="submit">Отправить</Button>
+          )}
         </form>
       </Card>
     </div>
@@ -116,7 +152,10 @@ function Bubble({ msg }: { msg: Msg }) {
     <div className="flex justify-start">
       <div className="max-w-[85%] space-y-2">
         <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-elevated px-4 py-3 text-sm leading-relaxed text-fg">
-          <p className="whitespace-pre-wrap">{msg.text}</p>
+          <p className="whitespace-pre-wrap">
+            {msg.text}
+            {msg.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />}
+          </p>
         </div>
         {msg.safety_flags && msg.safety_flags.length > 0 && (
           <div className="flex flex-wrap gap-1">

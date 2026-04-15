@@ -42,31 +42,39 @@ log = logging.getLogger(__name__)
 # --- Helpers ---
 
 def _require_user(chat_id: int) -> User | None:
-    """Only respond to the paired chat."""
+    """Only respond to the paired chat — works in both PIN and OAuth modes."""
     with Session(engine) as s:
-        user = s.exec(select(User)).first()
-        if not user:
-            return None
-        if user.telegram_chat_id != chat_id:
-            return None
+        user = s.exec(select(User).where(User.telegram_chat_id == chat_id)).first()
         return user
 
 
 def _pair_chat(chat_id: int) -> bool:
-    """Pair the bot with the user account if not yet paired."""
+    """Pair the bot with a user account.
+
+    PIN mode: one user — create/attach.
+    OAuth mode: chat must be paired to an existing user via the web UI (TODO: UX flow).
+    For MVP we do a simple rule: if there's exactly one user in the DB, pair to that one.
+    """
     with Session(engine) as s:
-        user = s.exec(select(User)).first()
-        if not user:
-            user = User(telegram_chat_id=chat_id)
-            s.add(user)
+        # Already paired?
+        existing = s.exec(select(User).where(User.telegram_chat_id == chat_id)).first()
+        if existing:
+            return True
+        # Find candidate user
+        users = s.exec(select(User)).all()
+        if not users:
+            # Single-user PIN mode bootstrap
+            u = User(telegram_chat_id=chat_id)
+            s.add(u)
             s.commit()
             return True
-        if user.telegram_chat_id and user.telegram_chat_id != chat_id:
-            return False
-        user.telegram_chat_id = chat_id
-        s.add(user)
-        s.commit()
-        return True
+        if len(users) == 1:
+            users[0].telegram_chat_id = chat_id
+            s.add(users[0])
+            s.commit()
+            return True
+        # Multi-user ambiguous — refuse. User must pair via web UI flow (future).
+        return False
 
 
 # --- Handlers ---
@@ -282,16 +290,21 @@ def _format_mdt(r: MdtReport) -> str:
 async def post_init(app: Application) -> None:
     # Schedule morning brief — uses app's job queue
     async def morning_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not get_settings().has_llm:
+            return
         with Session(engine) as s:
-            user = s.exec(select(User)).first()
-            if not user or not user.telegram_chat_id:
-                return
-            if not get_settings().has_llm:
-                return
-            fresh_user = s.get(User, user.id)
-            brief = generate_daily_brief(s, fresh_user)
-        text = _format_brief(brief)
-        await app.bot.send_message(chat_id=user.telegram_chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
+            paired_users = s.exec(
+                select(User).where(User.telegram_chat_id.is_not(None))
+            ).all()
+            for user in paired_users:
+                try:
+                    brief = generate_daily_brief(s, user)
+                    text = _format_brief(brief)
+                    await app.bot.send_message(
+                        chat_id=user.telegram_chat_id, text=text, parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception as e:
+                    log.warning("Morning brief failed for user %s: %s", user.id, e)
 
     from datetime import time
     app.job_queue.run_daily(morning_job, time=time(hour=7, minute=0), name="morning_brief")

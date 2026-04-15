@@ -8,6 +8,7 @@ import { Card, Pill, Empty } from "@/components/Card";
 export default function ReportPage({ params }: { params: { id: string } }) {
   const [r, setR] = useState<any>(null);
   const [err, setErr] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     api.reports
@@ -16,24 +17,45 @@ export default function ReportPage({ params }: { params: { id: string } }) {
       .catch((e) => setErr(e.message));
   }, [params.id]);
 
+  async function downloadPdf() {
+    setPdfBusy(true);
+    try {
+      await api.reports.mdtPdf(Number(params.id));
+    } catch (e: any) {
+      alert("Не удалось сформировать PDF: " + e.message);
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   if (err) return <div className="text-danger">Ошибка: {err}</div>;
   if (!r) return <div className="skeleton h-48" />;
 
   return (
     <div className="space-y-5">
-      <div>
-        <Link href="/reports" className="text-xs text-fg-muted hover:text-fg">
-          ← Все отчёты
-        </Link>
-        <h1 className="mt-2 text-lg font-semibold">
-          MDT-отчёт от{" "}
-          {new Date(r.created_at).toLocaleString("ru-RU", {
-            day: "numeric",
-            month: "long",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </h1>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/reports" className="text-xs text-fg-muted hover:text-fg">
+            ← Все отчёты
+          </Link>
+          <h1 className="mt-2 text-lg font-semibold">
+            MDT-отчёт от{" "}
+            {new Date(r.created_at).toLocaleString("ru-RU", {
+              day: "numeric",
+              month: "long",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </h1>
+        </div>
+        <button
+          onClick={downloadPdf}
+          disabled={pdfBusy}
+          className="inline-flex items-center gap-1.5 rounded-md bg-bg-elevated px-3 py-1.5 text-sm text-fg transition hover:bg-border/60 disabled:opacity-50"
+          title="Скачать PDF для похода к живому врачу"
+        >
+          {pdfBusy ? "Формирую PDF…" : "PDF для врача"}
+        </button>
       </div>
 
       <Card title="Синтез GP">

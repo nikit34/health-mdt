@@ -1,37 +1,37 @@
-"""Reports — briefs, MDT consilium on demand, history."""
+"""Reports — briefs, MDT consilium on demand, history, PDF export."""
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlmodel import Session, select
 
 from ..agents.orchestrator import generate_daily_brief, run_mdt_consilium
+from ..auth_deps import get_current_user
 from ..config import get_settings
 from ..db import Brief, MdtReport, PubmedEvidence, User
 from ..db.session import engine, get_session
-from .auth import require_session
+from ..reports.pdf_export import render_mdt_pdf
 
-router = APIRouter(dependencies=[Depends(require_session)])
+router = APIRouter()
 
 
 @router.post("/brief/generate")
-def generate_brief_now(session: Session = Depends(get_session)) -> dict:
+def generate_brief_now(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     s = get_settings()
     if not s.has_llm:
         raise HTTPException(400, "ANTHROPIC_API_KEY not configured — агенты выключены")
-    user = session.exec(select(User)).first()
-    if not user:
-        raise HTTPException(400, "user not initialized")
     brief = generate_daily_brief(session, user)
     return _brief_dict(brief)
 
 
 @router.get("/brief/latest")
-def get_latest_brief(session: Session = Depends(get_session)) -> dict | None:
-    user = session.exec(select(User)).first()
-    if not user:
-        return None
+def get_latest_brief(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict | None:
     b = session.exec(
         select(Brief).where(Brief.user_id == user.id).order_by(Brief.created_at.desc())
     ).first()
@@ -41,11 +41,9 @@ def get_latest_brief(session: Session = Depends(get_session)) -> dict | None:
 @router.get("/briefs")
 def list_briefs(
     limit: int = Query(30, le=100),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[dict]:
-    user = session.exec(select(User)).first()
-    if not user:
-        return []
     rows = session.exec(
         select(Brief)
         .where(Brief.user_id == user.id)
@@ -60,15 +58,11 @@ def run_mdt_now(
     bg: BackgroundTasks,
     kind: str = "weekly",
     window_days: int = 7,
-    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> dict:
     s = get_settings()
     if not s.has_llm:
         raise HTTPException(400, "ANTHROPIC_API_KEY not configured")
-    user = session.exec(select(User)).first()
-    if not user:
-        raise HTTPException(400, "user not initialized")
-    # Run in background — can take 30-60s
     bg.add_task(_run_mdt_bg, user.id, kind, window_days)
     return {"status": "started", "kind": kind, "window_days": window_days}
 
@@ -81,10 +75,10 @@ def _run_mdt_bg(user_id: int, kind: str, window_days: int) -> None:
 
 
 @router.get("/mdt/latest")
-def get_latest_mdt(session: Session = Depends(get_session)) -> dict | None:
-    user = session.exec(select(User)).first()
-    if not user:
-        return None
+def get_latest_mdt(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict | None:
     r = session.exec(
         select(MdtReport).where(MdtReport.user_id == user.id).order_by(MdtReport.created_at.desc())
     ).first()
@@ -94,11 +88,9 @@ def get_latest_mdt(session: Session = Depends(get_session)) -> dict | None:
 @router.get("/mdt")
 def list_mdt(
     limit: int = Query(10, le=50),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[dict]:
-    user = session.exec(select(User)).first()
-    if not user:
-        return []
     rows = session.exec(
         select(MdtReport)
         .where(MdtReport.user_id == user.id)
@@ -109,11 +101,34 @@ def list_mdt(
 
 
 @router.get("/mdt/{report_id}")
-def get_mdt(report_id: int, session: Session = Depends(get_session)) -> dict:
+def get_mdt(
+    report_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     r = session.get(MdtReport, report_id)
-    if not r:
+    if not r or r.user_id != user.id:
         raise HTTPException(404)
     return _mdt_dict(session, r)
+
+
+@router.get("/mdt/{report_id}/pdf")
+def get_mdt_pdf(
+    report_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Render MDT report as PDF — print-friendly, hand-to-physician format."""
+    r = session.get(MdtReport, report_id)
+    if not r or r.user_id != user.id:
+        raise HTTPException(404)
+    pdf_bytes = render_mdt_pdf(session, r)
+    filename = f"mdt-report-{r.created_at.date().isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _brief_dict(b: Brief) -> dict:
@@ -128,7 +143,6 @@ def _brief_dict(b: Brief) -> dict:
 
 
 def _mdt_dict(session: Session, r: MdtReport) -> dict:
-    # Fetch evidence details
     evidence: list[dict] = []
     if r.evidence_pmids:
         rows = session.exec(
@@ -136,7 +150,7 @@ def _mdt_dict(session: Session, r: MdtReport) -> dict:
         ).all()
         seen: set[str] = set()
         for ev in rows:
-            if ev.pmid in seen or not ev.pmid:
+            if ev.pmid in seen or not ev.pmid or ev.title == "(no results)":
                 continue
             seen.add(ev.pmid)
             evidence.append({

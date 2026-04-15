@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -153,6 +154,28 @@ class Agent:
                 "model": resp.model,
             },
         )
+
+    def stream(self, user_message: str, system_override: str | None = None) -> Iterator[str]:
+        """Stream a free-form response (plain text, not JSON).
+
+        Used by the chat endpoint where we want progressive UI updates.
+        The system prompt is still cached; output is streamed token by token.
+        """
+        client = self._client()
+        system_blocks = (
+            [{"type": "text", "text": system_override, "cache_control": {"type": "ephemeral"}}]
+            if system_override
+            else self._cached_system()
+        )
+        with client.messages.stream(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=system_blocks,
+            messages=[{"role": "user", "content": user_message}],
+        ) as stream:
+            for chunk in stream.text_stream:
+                if chunk:
+                    yield chunk
 
 
 def _safe_float(v, default: float) -> float:

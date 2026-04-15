@@ -7,37 +7,31 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
 
+from ..auth_deps import get_current_user
 from ..config import get_settings
 from ..db import Document, User
 from ..db.session import engine, get_session
 from ..integrations.documents import process_medical_document
-from .auth import require_session
 
-router = APIRouter(dependencies=[Depends(require_session)])
+router = APIRouter()
 
 
 @router.post("/upload")
 async def upload_document(
     bg: BackgroundTasks,
     file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        raise HTTPException(400, "user not initialized — complete onboarding first")
-
     settings = get_settings()
     dest_dir = settings.uploads_dir
     dest_dir.mkdir(parents=True, exist_ok=True)
-    # Uniq filename
     suffix = Path(file.filename or "upload").suffix or ".bin"
     safe_name = f"{uuid.uuid4().hex}{suffix}"
     dest = dest_dir / safe_name
     with dest.open("wb") as f:
         while chunk := await file.read(1 << 16):
             f.write(chunk)
-
-    # Process in background so request returns fast
     bg.add_task(_process_in_background, user.id, dest, file.filename or safe_name, file.content_type or "application/octet-stream")
     return {"status": "accepted", "filename": file.filename}
 
@@ -50,10 +44,10 @@ def _process_in_background(user_id: int, path: Path, original: str, mime: str) -
 
 
 @router.get("")
-def list_documents(session: Session = Depends(get_session)) -> list[dict]:
-    user = session.exec(select(User)).first()
-    if not user:
-        return []
+def list_documents(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[dict]:
     rows = session.exec(
         select(Document).where(Document.user_id == user.id).order_by(Document.uploaded_at.desc())
     ).all()
@@ -72,8 +66,12 @@ def list_documents(session: Session = Depends(get_session)) -> list[dict]:
 
 
 @router.get("/{doc_id}")
-def get_document(doc_id: int, session: Session = Depends(get_session)) -> dict:
+def get_document(
+    doc_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     d = session.get(Document, doc_id)
-    if not d:
+    if not d or d.user_id != user.id:
         raise HTTPException(404)
     return d.model_dump()

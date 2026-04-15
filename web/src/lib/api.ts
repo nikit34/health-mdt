@@ -74,6 +74,20 @@ export const api = {
       request<any>(`/reports/mdt/run?kind=${body?.kind ?? "weekly"}&window_days=${body?.window_days ?? 7}`, {
         method: "POST",
       }),
+    mdtPdf: async (id: number): Promise<void> => {
+      const token = (typeof window !== "undefined" && window.localStorage.getItem("hmdt_session")) || "";
+      const res = await fetch(`${BASE}/reports/mdt/${id}/pdf`, { headers: { "X-Session": token } });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mdt-report-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
   },
 
   tasks: {
@@ -110,6 +124,32 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ question, window_days }),
       }),
+    streamAsk: (
+      question: string,
+      onChunk: (text: string) => void,
+      onDone: () => void,
+      onError: (err: string) => void,
+      window_days = 14,
+    ): (() => void) => {
+      const params = new URLSearchParams({
+        question,
+        window_days: String(window_days),
+        session: (typeof window !== "undefined" && window.localStorage.getItem("hmdt_session")) || "",
+      });
+      const url = `${BASE}/chat/ask/stream?${params.toString()}`;
+      const source = new EventSource(url);
+      source.addEventListener("start", () => {});
+      source.addEventListener("chunk", (e: MessageEvent) => onChunk(e.data));
+      source.addEventListener("done", () => {
+        source.close();
+        onDone();
+      });
+      source.addEventListener("error", (e: MessageEvent) => {
+        source.close();
+        onError(typeof e?.data === "string" ? e.data : "stream_error");
+      });
+      return () => source.close();
+    },
   },
 };
 

@@ -1,8 +1,14 @@
 FROM python:3.12-slim
 
-# System deps for lxml (Apple Health XML parser) and pdf processing
+# System deps:
+#   libxml2/xslt — Apple Health streaming XML parser
+#   poppler-utils — PDF text extraction for medical docs
+#   weasyprint deps — pango, cairo, fontconfig for PDF rendering
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev libxslt1-dev build-essential poppler-utils \
+    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libfontconfig1 \
+    libcairo2 libjpeg62-turbo libgdk-pixbuf-2.0-0 \
+    fonts-dejavu fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

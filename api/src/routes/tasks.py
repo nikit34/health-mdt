@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from ..auth_deps import get_current_user
 from ..db import Task, User
 from ..db.session import get_session
-from .auth import require_session
 
-router = APIRouter(dependencies=[Depends(require_session)])
+router = APIRouter()
 
 
 class TaskIn(BaseModel):
@@ -26,11 +26,9 @@ class TaskIn(BaseModel):
 @router.get("")
 def list_tasks(
     status: Optional[str] = "open",
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[dict]:
-    user = session.exec(select(User)).first()
-    if not user:
-        return []
     stmt = select(Task).where(Task.user_id == user.id)
     if status:
         stmt = stmt.where(Task.status == status)
@@ -39,10 +37,11 @@ def list_tasks(
 
 
 @router.post("")
-def create_task(payload: TaskIn, session: Session = Depends(get_session)) -> dict:
-    user = session.exec(select(User)).first()
-    if not user:
-        raise HTTPException(400, "user not initialized")
+def create_task(
+    payload: TaskIn,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     t = Task(
         user_id=user.id,
         created_by="user",
@@ -70,10 +69,11 @@ class TaskUpdate(BaseModel):
 def update_task(
     task_id: int,
     payload: TaskUpdate,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
     t = session.get(Task, task_id)
-    if not t:
+    if not t or t.user_id != user.id:
         raise HTTPException(404)
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(t, k, v)
@@ -86,9 +86,13 @@ def update_task(
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: int, session: Session = Depends(get_session)) -> dict:
+def delete_task(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
     t = session.get(Task, task_id)
-    if not t:
+    if not t or t.user_id != user.id:
         raise HTTPException(404)
     session.delete(t)
     session.commit()
@@ -112,18 +116,6 @@ def _task_dict(t: Task) -> dict:
 
 
 def _apple_reminders_url(t: Task) -> str:
-    """x-apple-reminderkit:// URL to add to Apple Reminders via a Shortcut on iOS.
-
-    On iOS the user taps this link → a shortcut picks up title/notes and creates a reminder.
-    See docs/apple-reminders.md for the one-time shortcut setup.
-    """
-    params = {
-        "title": t.title,
-        "notes": t.detail or "",
-    }
-    if t.due:
-        params["due"] = t.due.isoformat()
-    # Custom scheme consumed by the user's "Add to Reminders" shortcut
     return "shortcuts://run-shortcut?name=HealthMDT%20Add&input=" + urllib.parse.quote(
         f"{t.title}||{t.detail or ''}||{t.due.isoformat() if t.due else ''}"
     )
