@@ -1,0 +1,34 @@
+# Fly.io sample config — adjust name and region.
+# Usage:
+#   fly launch --copy-config --name health-mdt-<you>
+#   fly secrets set ANTHROPIC_API_KEY=...
+#   fly deploy
+app = "health-mdt"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile.fly"
+
+[env]
+  DOMAIN = "health-mdt.fly.dev"
+
+[[services]]
+  internal_port = 80
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+[[mounts]]
+  source = "health_mdt_data"
+  destination = "/app/data"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

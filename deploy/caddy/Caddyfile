@@ -1,0 +1,54 @@
+{
+	# Global options — auto-HTTPS handled by Caddy via Let's Encrypt
+	email admin@{$DOMAIN}
+	admin off
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# API routes
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy api:8000
+	}
+
+	# Server-sent events for agent streaming
+	handle /events/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else → Next.js web app
+	handle {
+		reverse_proxy web:3000
+	}
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Fallback for localhost / IP-only access (no HTTPS)
+:80 {
+	@notDomain not host {$DOMAIN}
+	handle @notDomain {
+		handle /api/* {
+			uri strip_prefix /api
+			reverse_proxy api:8000
+		}
+		handle {
+			reverse_proxy web:3000
+		}
+	}
+}

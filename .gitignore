@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+*.secret
+*.key
+
+# Data (never commit user health data!)
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+api/data/
+api/uploads/
+api/cache/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Caddy runtime
+deploy/caddy/data/
+deploy/caddy/config/
+
+# Deploy artifacts
+deploy-output.txt
+qr.png
