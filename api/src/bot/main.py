@@ -91,28 +91,75 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "Добро пожаловать в health-mdt.\n\n"
                 "Чтобы связать этот чат с твоим аккаунтом, отправь:\n"
                 "`/start <PIN>`\n\n"
-                "PIN ты получил при деплое инстанса.",
+                "PIN ты получил при деплое инстанса.\n\n"
+                "Или, если у тебя multi-user режим, сгенерируй код "
+                "привязки в Настройках веб-интерфейса и отправь:\n"
+                "`/pair <КОД>`",
                 parse_mode=ParseMode.MARKDOWN,
             )
             return
 
     if _pair_chat(chat_id):
-        await update.message.reply_text(
-            "✓ Чат привязан.\n\n"
-            "Что я умею:\n"
-            "/brief — утренний бриф\n"
-            "/checkin как дела сегодня — зафиксировать чек-ин\n"
-            "/ask ... — спросить GP-агента\n"
-            "/report — последний недельный MDT-отчёт\n"
-            "/tasks — открытые задачи\n"
-            "/done <id> — закрыть задачу\n\n"
-            "Каждое утро в 07:00 я буду присылать бриф автоматически."
-        )
+        await update.message.reply_text(_help_text())
     else:
         await update.message.reply_text(
-            "Аккаунт уже привязан к другому чату. "
-            "Отвяжи его в веб-интерфейсе и попробуй ещё раз."
+            "На этом инстансе несколько пользователей.\n\n"
+            "Чтобы привязать этот чат к своему аккаунту:\n"
+            "1. Открой Настройки в вебе\n"
+            "2. Нажми «Привязать Telegram»\n"
+            "3. Отправь мне: `/pair <КОД>`",
+            parse_mode=ParseMode.MARKDOWN,
         )
+
+
+async def cmd_pair(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Link this chat to a user account via a temporary pairing code from the web UI."""
+    chat_id = update.effective_chat.id
+    if not context.args:
+        await update.message.reply_text("Использование: `/pair <КОД>`\n\nКод получи в Настройках веб-интерфейса.", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    code = context.args[0].strip().upper()
+
+    # Import the pairing verifier from the routes module
+    from ..routes.telegram import verify_pairing_code
+    user_id = verify_pairing_code(code, chat_id)
+
+    if not user_id:
+        await update.message.reply_text("Код неверный или истёк. Сгенерируй новый в Настройках.")
+        return
+
+    # Link the chat
+    with Session(engine) as s:
+        # Check if this chat is already linked to another user
+        existing = s.exec(select(User).where(User.telegram_chat_id == chat_id)).first()
+        if existing and existing.id != user_id:
+            existing.telegram_chat_id = None
+            s.add(existing)
+
+        user = s.get(User, user_id)
+        if not user:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        user.telegram_chat_id = chat_id
+        s.add(user)
+        s.commit()
+
+    await update.message.reply_text(f"✓ Чат привязан к аккаунту.\n\n{_help_text()}")
+
+
+def _help_text() -> str:
+    return (
+        "Что я умею:\n"
+        "/brief — утренний бриф\n"
+        "/checkin как дела сегодня — зафиксировать чек-ин\n"
+        "/ask ... — спросить GP-агента\n"
+        "/report — последний недельный MDT-отчёт\n"
+        "/tasks — открытые задачи\n"
+        "/done <id> — закрыть задачу\n"
+        "/pair <код> — привязать к аккаунту (multi-user)\n\n"
+        "Каждое утро в 07:00 я буду присылать бриф автоматически."
+    )
 
 
 async def cmd_brief(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -321,6 +368,7 @@ def build_app() -> Application | None:
     init_db()
     app = Application.builder().token(settings.telegram_bot_token).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("pair", cmd_pair))
     app.add_handler(CommandHandler("brief", cmd_brief))
     app.add_handler(CommandHandler("checkin", cmd_checkin))
     app.add_handler(CommandHandler("ask", cmd_ask))

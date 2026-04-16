@@ -126,6 +126,10 @@ Lifestyle    MDT specialists
 | QR deep-link | ✅ | URL вида `/#pin=123456` авто-логин |
 | One-click deploy (Docker + Caddy) | ✅ | `./scripts/deploy.sh domain` |
 | Prompt caching | ✅ | Стабильные system prompts → ~90% экономии |
+| **Per-user Telegram pairing (multi-user)** | ✅ | `/pair <КОД>` из Настроек |
+| **Web Push уведомления** | ✅ | Утренний бриф и MDT → browser push |
+| **Email-уведомления (SMTP)** | ✅ | Бриф + MDT на почту, HTML-шаблоны |
+| **Auto-seed demo data** | ✅ | Первый запуск → сразу есть данные |
 
 ## Режимы авторизации
 
@@ -149,11 +153,7 @@ Credentials создаются на [console.cloud.google.com](https://console.c
 
 ## Что бы доделал дальше
 
-- Per-user Telegram pairing UI flow (сейчас в multi-user режиме чат привяжется к
-  единственному юзеру или будет отказ).
-- Трекинг доз лекарств и reminders по ним.
 - Постгрес-бэкенд для high-scale (SQLModel уже портативен — поменять `DATABASE_URL`).
-- Web Push для утренних брифов (сейчас через Telegram или email — TODO email).
 - Больше специалистов (добавить в `registry.py`).
 
 ## Стек

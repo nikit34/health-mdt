@@ -28,6 +28,11 @@ class User(SQLModel, table=True):
     # Telegram chat linking
     telegram_chat_id: Optional[int] = None
 
+    # Notification preferences
+    email_notifications: bool = False
+    notification_email: Optional[str] = None  # separate from oauth email if desired
+    push_notifications: bool = True  # on by default when subscribed
+
 
 class Metric(SQLModel, table=True):
     """Time-series metrics from Oura, Apple Health, manual entry.
@@ -165,6 +170,17 @@ class ChatMessage(SQLModel, table=True):
     content: str
     # Optional metadata — safety flags, follow-ups extracted from assistant text
     meta: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class PushSubscription(SQLModel, table=True):
+    """Web Push subscription — one per browser per user."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    endpoint: str = Field(index=True)
+    p256dh: str
+    auth: str
+    user_agent: str = ""
 
 
 class Medication(SQLModel, table=True):

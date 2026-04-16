@@ -13,6 +13,8 @@ from ..config import get_settings
 from ..db import Medication, Task, User
 from ..db.session import engine
 from ..integrations.oura import fetch_oura_daily
+from ..notifications.push import send_push_to_user
+from ..notifications.email import send_email_to_user, format_brief_email, format_mdt_email
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +84,27 @@ def _daily_sync_and_brief() -> None:
         brief = generate_daily_brief(s, user)
         log.info("Daily brief created for user %s: id=%s", user.id, brief.id)
 
+        # Push notification
+        try:
+            send_push_to_user(
+                s, user,
+                title="Утренний бриф",
+                body=(brief.text or "")[:120],
+                url="/",
+                tag="daily-brief",
+            )
+        except Exception as e:
+            log.warning("Push notification failed for user %s: %s", user.id, e)
+
+        # Email notification
+        try:
+            plain, html = format_brief_email(
+                brief.text or "", brief.highlights or [], brief.for_date.isoformat()
+            )
+            send_email_to_user(user, subject=f"Утренний бриф — {brief.for_date}", body_text=plain, body_html=html)
+        except Exception as e:
+            log.warning("Email notification failed for user %s: %s", user.id, e)
+
     _for_each_user(_job)
 
 
@@ -93,6 +116,28 @@ def _weekly_mdt() -> None:
     def _job(s, user):
         report = run_mdt_consilium(s, user, kind="weekly", window_days=7)
         log.info("Weekly MDT created for user %s: id=%s", user.id, report.id)
+
+        # Push notification
+        try:
+            send_push_to_user(
+                s, user,
+                title="Еженедельный MDT-отчёт",
+                body=(report.gp_synthesis or "")[:120],
+                url=f"/reports/{report.id}",
+                tag="weekly-mdt",
+            )
+        except Exception as e:
+            log.warning("Push notification failed for user %s: %s", user.id, e)
+
+        # Email notification
+        try:
+            plain, html = format_mdt_email(
+                report.gp_synthesis or "", report.problem_list or [],
+                report.safety_net or [], report.kind,
+            )
+            send_email_to_user(user, subject="MDT-отчёт (еженедельный)", body_text=plain, body_html=html)
+        except Exception as e:
+            log.warning("Email notification failed for user %s: %s", user.id, e)
 
     _for_each_user(_job)
 

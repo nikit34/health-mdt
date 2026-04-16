@@ -23,6 +23,9 @@ class UserUpdate(BaseModel):
     weight_kg: Optional[float] = None
     timezone: Optional[str] = None
     context: Optional[str] = None
+    email_notifications: Optional[bool] = None
+    notification_email: Optional[str] = None
+    push_notifications: Optional[bool] = None
 
 
 @router.get("/me")

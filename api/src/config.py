@@ -42,6 +42,19 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str = ""
 
+    # Email notifications (SMTP)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    smtp_from: str = ""  # "Health MDT <noreply@example.com>"
+    smtp_tls: bool = True
+
+    # Web Push (VAPID) — auto-generated on first start if empty
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
+    vapid_mailto: str = ""  # "mailto:admin@example.com"
+
     # Models
     agent_model: str = "claude-sonnet-4-6"
     synthesis_model: str = "claude-opus-4-6"
@@ -67,6 +80,14 @@ class Settings(BaseSettings):
         if self.anthropic_api_key:
             return "api_key"
         return "none"
+
+    @property
+    def has_smtp(self) -> bool:
+        return bool(self.smtp_host) and bool(self.smtp_from)
+
+    @property
+    def has_vapid(self) -> bool:
+        return bool(self.vapid_private_key) and bool(self.vapid_public_key)
 
     @property
     def has_oura(self) -> bool:
@@ -119,4 +140,27 @@ def get_settings() -> Settings:
             import secrets as _s
             settings.session_secret = _s.token_urlsafe(48)
             secret_file.write_text(settings.session_secret)
+    # Auto-generate VAPID keys for Web Push if not set
+    if not settings.vapid_private_key:
+        vapid_file = settings.data_dir / "vapid_keys.json"
+        if vapid_file.exists():
+            import json as _json
+            keys = _json.loads(vapid_file.read_text())
+            settings.vapid_private_key = keys["private"]
+            settings.vapid_public_key = keys["public"]
+        else:
+            try:
+                from pywebpush import webpush  # noqa: F401
+                from py_vapid import Vapid
+                v = Vapid()
+                v.generate_keys()
+                settings.vapid_private_key = v.private_pem().decode()
+                settings.vapid_public_key = v.public_key_urlsafe_base64()
+                import json as _json
+                vapid_file.write_text(_json.dumps({
+                    "private": settings.vapid_private_key,
+                    "public": settings.vapid_public_key,
+                }))
+            except ImportError:
+                pass  # pywebpush not installed — push disabled
     return settings

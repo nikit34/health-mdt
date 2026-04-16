@@ -145,6 +145,23 @@ export const api = {
     },
   },
 
+  telegram: {
+    status: () => request<{ paired: boolean; chat_id: number | null; bot_configured: boolean }>("/telegram/status"),
+    pairCode: () => request<{ code: string; ttl_seconds: number }>("/telegram/pair-code", { method: "POST" }),
+    unpair: () => request<{ ok: boolean }>("/telegram/unpair", { method: "DELETE" }),
+  },
+
+  push: {
+    vapidKey: () => request<{ public_key: string }>("/push/vapid-key"),
+    subscribe: (sub: { endpoint: string; p256dh: string; auth: string }) =>
+      request<{ ok: boolean }>("/push/subscribe", {
+        method: "POST",
+        body: JSON.stringify({ ...sub, user_agent: navigator.userAgent }),
+      }),
+    unsubscribe: () => request<{ ok: boolean }>("/push/subscribe", { method: "DELETE" }),
+    status: () => request<{ enabled: boolean; subscriptions: number }>("/push/status"),
+  },
+
   chat: {
     ask: (question: string, opts: { window_days?: number; conversation_id?: number } = {}) =>
       request<{

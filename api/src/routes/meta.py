@@ -43,6 +43,8 @@ def status(
             "oura": s.has_oura,
             "telegram": s.has_telegram,
             "oauth": s.has_oauth,
+            "smtp": s.has_smtp,
+            "push": s.has_vapid,
         },
         "llm_auth_mode": s.llm_auth_mode,  # 'setup_token' | 'api_key' | 'none'
         "user_onboarded": user_onboarded,
