@@ -1,10 +1,11 @@
 {
-	# Global options — auto-HTTPS handled by Caddy via Let's Encrypt
-	email admin@{$DOMAIN}
 	admin off
 }
 
-{$DOMAIN} {
+# Main site block.
+# When DOMAIN=localhost, Caddy sees "http://localhost" → plain HTTP, no TLS.
+# When DOMAIN=real.domain.com, Caddy auto-provisions HTTPS via Let's Encrypt.
+{$CADDY_SITE_ADDRESS} {
 	encode zstd gzip
 
 	# API routes
@@ -13,8 +14,9 @@
 		reverse_proxy api:8000
 	}
 
-	# Server-sent events for agent streaming
-	handle /events/* {
+	# Server-sent events for agent streaming — disable buffering
+	handle /api/chat/ask/stream* {
+		uri strip_prefix /api
 		reverse_proxy api:8000 {
 			flush_interval -1
 		}
@@ -25,9 +27,8 @@
 		reverse_proxy web:3000
 	}
 
-	# Security headers
+	# Security headers (only meaningful for real domains with TLS)
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		-Server
@@ -36,19 +37,5 @@
 	log {
 		output stdout
 		format console
-	}
-}
-
-# Fallback for localhost / IP-only access (no HTTPS)
-:80 {
-	@notDomain not host {$DOMAIN}
-	handle @notDomain {
-		handle /api/* {
-			uri strip_prefix /api
-			reverse_proxy api:8000
-		}
-		handle {
-			reverse_proxy web:3000
-		}
 	}
 }

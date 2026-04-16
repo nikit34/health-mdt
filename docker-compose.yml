@@ -47,6 +47,9 @@ services:
       - ./deploy/caddy/config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      # For localhost: "http://localhost" disables Caddy auto-HTTPS.
+      # For real domains: just the domain — Caddy provisions TLS automatically.
+      - CADDY_SITE_ADDRESS=${CADDY_SITE_ADDRESS:-http://localhost}
     depends_on:
       - api
       - web

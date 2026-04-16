@@ -70,9 +70,16 @@ else
   PIN=$(grep -E '^ACCESS_PIN=' .env | cut -d'=' -f2)
 fi
 
-# 3. Set domain
+# 3. Set domain + Caddy site address
 sed -i.bak "s|^DOMAIN=.*|DOMAIN=$DOMAIN|" .env && rm .env.bak
 ok "DOMAIN=$DOMAIN"
+# For localhost: Caddy needs "http://localhost" to skip auto-HTTPS
+# For real domains: just the domain (Caddy handles TLS)
+if [[ "$DOMAIN" == "localhost" ]]; then
+  export CADDY_SITE_ADDRESS="http://localhost"
+else
+  export CADDY_SITE_ADDRESS="$DOMAIN"
+fi
 
 # 4. Build & start
 info "Сборка контейнеров (первый раз займёт 2-4 минуты)…"

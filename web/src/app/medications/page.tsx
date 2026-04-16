@@ -205,9 +205,9 @@ export default function MedicationsPage() {
                 <div className="flex gap-1">
                   <Button variant="ghost" onClick={() => startEdit(m)}>✎</Button>
                   {m.is_active && (
-                    <Button variant="ghost" onClick={() => stopMed(m.id)} title="Отметить как прекращённое">
-                      ⏸
-                    </Button>
+                    <span title="Отметить как прекращённое">
+                      <Button variant="ghost" onClick={() => stopMed(m.id)}>⏸</Button>
+                    </span>
                   )}
                   <Button variant="ghost" onClick={() => remove(m.id)}>✕</Button>
                 </div>
