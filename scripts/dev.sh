@@ -8,7 +8,7 @@ cd "$REPO_ROOT"
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  echo "Создан .env — впиши ANTHROPIC_API_KEY и перезапусти."
+  echo "Создан .env — впиши CLAUDE_CODE_OAUTH_TOKEN (или ANTHROPIC_API_KEY) и перезапусти."
   exit 1
 fi
 

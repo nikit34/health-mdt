@@ -11,7 +11,7 @@ from statistics import mean, median
 
 from sqlmodel import Session, select
 
-from ..db import Checkin, LabResult, Metric, Task, User
+from ..db import Checkin, LabResult, Medication, Metric, Task, User
 
 
 # Clinical validity windows (days) — kept here so they're easy to tune
@@ -38,6 +38,7 @@ class ContextBundle:
     labs: list[dict] = field(default_factory=list)
     checkins: list[dict] = field(default_factory=list)
     open_tasks: list[dict] = field(default_factory=list)
+    medications: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -49,6 +50,7 @@ class ContextBundle:
             "labs": self.labs,
             "checkins": self.checkins,
             "open_tasks": self.open_tasks,
+            "medications": self.medications,
             "notes": self.notes,
         }
 
@@ -108,25 +110,53 @@ def build_context(
             summary["delta_pct_vs_baseline"] = round(delta_pct, 1)
         metrics_summary[kind] = summary
 
-    # === Labs with validity ===
-    labs_stmt = select(LabResult).where(LabResult.user_id == user.id).order_by(LabResult.drawn_at.desc())
+    # === Labs: latest value per (panel, analyte) + time-series for trend view ===
+    # Agents care about the most recent valid value AND how it's moving. A one-off
+    # HbA1c of 6.2 is different from a trajectory 5.9 → 6.1 → 6.3.
+    labs_stmt = (
+        select(LabResult)
+        .where(LabResult.user_id == user.id)
+        .order_by(LabResult.drawn_at.desc())
+    )
+    all_rows = session.exec(labs_stmt).all()
+
+    # Group by (panel, analyte); build latest + history (up to 5 most recent)
+    by_analyte: dict[tuple[str, str], list[LabResult]] = {}
+    for lr in all_rows:
+        by_analyte.setdefault((lr.panel, lr.analyte), []).append(lr)
+
     labs: list[dict] = []
-    for lr in session.exec(labs_stmt).all()[:50]:
-        window = VALIDITY_DAYS.get(lr.panel, VALIDITY_DAYS["default"])
-        age_days = (today - lr.drawn_at).days
+    for (panel, analyte), rows in by_analyte.items():
+        rows_sorted = sorted(rows, key=lambda r: r.drawn_at, reverse=True)
+        latest = rows_sorted[0]
+        window = VALIDITY_DAYS.get(panel, VALIDITY_DAYS["default"])
+        age_days = (today - latest.drawn_at).days
+
+        history = [
+            {"drawn_at": r.drawn_at.isoformat(), "value": r.value, "flag": r.flag}
+            for r in rows_sorted[:5]
+        ]
+        trend = _compute_trend(history)
+
         labs.append({
-            "panel": lr.panel,
-            "analyte": lr.analyte,
-            "value": lr.value,
-            "unit": lr.unit,
-            "ref_low": lr.ref_low,
-            "ref_high": lr.ref_high,
-            "flag": lr.flag,
-            "drawn_at": lr.drawn_at.isoformat(),
+            "panel": panel,
+            "analyte": analyte,
+            "value": latest.value,
+            "unit": latest.unit,
+            "ref_low": latest.ref_low,
+            "ref_high": latest.ref_high,
+            "flag": latest.flag,
+            "drawn_at": latest.drawn_at.isoformat(),
             "age_days": age_days,
             "valid": age_days <= window,
             "validity_window_days": window,
+            "history": history if len(history) > 1 else [],
+            "trend": trend,  # 'rising' | 'falling' | 'stable' | None
+            "n_measurements": len(rows),
         })
+    # Keep first 50 to bound payload; already grouped so this is analyte-level
+    labs.sort(key=lambda d: d["drawn_at"], reverse=True)
+    labs = labs[:50]
 
     # === Check-ins ===
     ci_stmt = (
@@ -160,6 +190,23 @@ def build_context(
         for t in session.exec(t_stmt).all()
     ]
 
+    # === Medications (active + recently stopped) ===
+    # Recently-stopped meds are useful context: a metric change right after stopping
+    # a medication is important signal. We cap to the last 10 records.
+    med_stmt = select(Medication).where(Medication.user_id == user.id).order_by(Medication.started_on.desc())
+    medications: list[dict] = []
+    for m in session.exec(med_stmt).all()[:10]:
+        active = not m.stopped_on or m.stopped_on >= today
+        medications.append({
+            "name": m.name,
+            "dose": m.dose,
+            "frequency": m.frequency,
+            "started_on": m.started_on.isoformat() if m.started_on else None,
+            "stopped_on": m.stopped_on.isoformat() if m.stopped_on else None,
+            "status": "active" if active else "stopped",
+            "notes": m.notes,
+        })
+
     notes: list[str] = []
     if not metrics_summary:
         notes.append("Нет метрик за окно — предложи пользователю подключить Oura / загрузить Apple Health.")
@@ -183,6 +230,7 @@ def build_context(
         labs=labs,
         checkins=checkins,
         open_tasks=open_tasks,
+        medications=medications,
         notes=notes,
     )
 
@@ -190,3 +238,28 @@ def build_context(
 def _age(birthdate: date) -> int:
     today = date.today()
     return today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+
+
+def _compute_trend(history: list[dict]) -> str | None:
+    """From the last few measurements, classify direction.
+
+    Simple but useful: compare most-recent value to mean of prior 2+ values.
+    A 5% swing counts as rising/falling; below that we call it stable.
+    Returns None when there are <2 points.
+    """
+    if len(history) < 2:
+        return None
+    # history is newest-first
+    latest = history[0]["value"]
+    prior = [h["value"] for h in history[1:4]]  # up to 3 prior points
+    if not prior:
+        return None
+    base = mean(prior)
+    if base == 0:
+        return None
+    delta = (latest - base) / abs(base)
+    if delta > 0.05:
+        return "rising"
+    if delta < -0.05:
+        return "falling"
+    return "stable"

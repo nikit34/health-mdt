@@ -19,15 +19,16 @@ from .config import get_settings
 from .db import User
 from .db.session import get_session
 
-# In-memory PIN sessions (fine for single-user MVP)
-_pin_sessions: dict[str, datetime] = {}
+# In-memory PIN sessions — token -> (user_id, expires_at).
+# PIN mode is single-user by design; the user_id is the single User row's id.
+_pin_sessions: dict[str, tuple[int, datetime]] = {}
 _PIN_SESSION_TTL = timedelta(days=30)
 
 # OAuth session lifetime (signed token)
 _OAUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
 
 
-def pin_session_store() -> dict[str, datetime]:
+def pin_session_store() -> dict[str, tuple[int, datetime]]:
     """Expose the PIN session store so auth routes can mutate it."""
     return _pin_sessions
 
@@ -41,10 +42,11 @@ def issue_oauth_session(user_id: int) -> str:
     return _oauth_serializer().dumps({"uid": user_id})
 
 
-def issue_pin_session() -> str:
+def issue_pin_session(user_id: int) -> str:
+    """Issue a PIN session tied to the given user_id."""
     import secrets
     token = secrets.token_urlsafe(32)
-    _pin_sessions[token] = datetime.utcnow() + _PIN_SESSION_TTL
+    _pin_sessions[token] = (user_id, datetime.utcnow() + _PIN_SESSION_TTL)
     return token
 
 
@@ -61,14 +63,16 @@ def _resolve_user_from_token(token: str, session: Session) -> Optional[User]:
         return session.get(User, uid)
     # PIN mode
     if not settings.access_pin.strip():
-        # Open mode — return or create single user
+        # Open mode — return or create single user, no token required
         return _single_user(session)
-    if not token or token not in _pin_sessions:
+    entry = _pin_sessions.get(token)
+    if not entry:
         return None
-    if _pin_sessions[token] < datetime.utcnow():
+    uid, expires = entry
+    if expires < datetime.utcnow():
         _pin_sessions.pop(token, None)
         return None
-    return _single_user(session)
+    return session.get(User, uid) or _single_user(session)
 
 
 def _single_user(session: Session) -> User:
@@ -79,6 +83,11 @@ def _single_user(session: Session) -> User:
         session.commit()
         session.refresh(user)
     return user
+
+
+def ensure_single_user_id(session: Session) -> int:
+    """Get or create the single user for PIN mode. Returns the user_id."""
+    return _single_user(session).id
 
 
 def get_current_user(
@@ -104,6 +113,8 @@ def validate_session_token_raw(token: str) -> Optional[int]:
     """Pure-function variant for contexts without DI (SSE query params).
 
     Returns user_id on success, None on failure. Caller does its own 401 handling.
+    In open mode (no PIN configured) returns None for missing token so caller
+    can explicitly resolve the single user via a DB session.
     """
     settings = get_settings()
     if settings.has_oauth:
@@ -112,8 +123,16 @@ def validate_session_token_raw(token: str) -> Optional[int]:
             return data.get("uid") if isinstance(data, dict) else None
         except Exception:
             return None
+    # PIN mode
     if not settings.access_pin.strip():
-        return 1  # "any user" in open mode
-    if token in _pin_sessions and _pin_sessions[token] >= datetime.utcnow():
-        return 1
-    return None
+        # Open mode — accept any token or no token, return sentinel 0
+        # meaning "resolve single user when DB session is available".
+        return 0
+    entry = _pin_sessions.get(token)
+    if not entry:
+        return None
+    uid, expires = entry
+    if expires < datetime.utcnow():
+        _pin_sessions.pop(token, None)
+        return None
+    return uid

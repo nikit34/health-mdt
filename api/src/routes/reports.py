@@ -22,7 +22,7 @@ def generate_brief_now(
 ) -> dict:
     s = get_settings()
     if not s.has_llm:
-        raise HTTPException(400, "ANTHROPIC_API_KEY not configured — агенты выключены")
+        raise HTTPException(400, "LLM credentials not configured — задай CLAUDE_CODE_OAUTH_TOKEN или ANTHROPIC_API_KEY")
     brief = generate_daily_brief(session, user)
     return _brief_dict(brief)
 
@@ -62,7 +62,7 @@ def run_mdt_now(
 ) -> dict:
     s = get_settings()
     if not s.has_llm:
-        raise HTTPException(400, "ANTHROPIC_API_KEY not configured")
+        raise HTTPException(400, "LLM credentials not configured")
     bg.add_task(_run_mdt_bg, user.id, kind, window_days)
     return {"status": "started", "kind": kind, "window_days": window_days}
 

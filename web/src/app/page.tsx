@@ -117,7 +117,7 @@ export default function Dashboard() {
             hint={
               status?.capabilities?.llm
                 ? "Нажми «Сгенерировать» — GP-агент прочитает данные за последние сутки."
-                : "Укажи ANTHROPIC_API_KEY в .env и перезапусти стек, чтобы активировать агентов."
+                : "Укажи CLAUDE_CODE_OAUTH_TOKEN (или ANTHROPIC_API_KEY) в .env и перезапусти стек, чтобы активировать агентов."
             }
           />
         )}

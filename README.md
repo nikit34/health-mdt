@@ -2,8 +2,9 @@
 
 > Мультиагентный персональный health-ассистент. Разворачивается за 2 минуты,
 > работает с Oura, Apple Health, медицинскими документами и чек-инами.
-> Команда из 8 LLM-специалистов под координацией GP-агента синтезирует ежедневные
-> брифы, еженедельные MDT-отчёты и задачи с полным жизненным циклом.
+> Команда из 9 LLM-специалистов + 4 lifestyle-коуча под координацией GP-агента
+> синтезирует ежедневные брифы, еженедельные MDT-отчёты с доказательной базой
+> (PubMed + Semantic Scholar) и задачи с полным жизненным циклом.
 
 [English ↓](#english)
 
@@ -39,7 +40,9 @@ cd health-mdt
 ```
 
 Скрипт:
-1. Спросит `ANTHROPIC_API_KEY` (получить на [console.anthropic.com](https://console.anthropic.com)).
+1. Спросит Claude-учётные данные — на выбор:
+   - **Setup token** (предпочтительно) — работает через подписку Claude Pro/Max, без отдельного биллинга. Получи командой `claude setup-token`.
+   - **API key** — pay-per-use, [console.anthropic.com](https://console.anthropic.com).
 2. Сгенерирует 6-значный PIN и сохранит в `.env`.
 3. Соберёт контейнеры (`api`, `web`, `bot`, `caddy`), стартанёт стек.
 4. Распечатает URL (`http://localhost`), PIN и ASCII-QR для мобильного.
@@ -79,18 +82,21 @@ Web  API   Bot
   ╲   │   ╱
    SQLite
       │
-   Orchestrator  ──▶  PubMed (cached)
+   Orchestrator  ──▶ PubMed + Semantic Scholar (cached 14d)
       │
  ┌────┼────────────┐
  │    │            │
 Lifestyle    MDT specialists
-(4 agents)   (4 agents)
+(4 coaches)  (9 specialists)
       ╲     ╱
-       GP (synthesis)
-      ╱        ╲
-  Brief     Weekly MDT
+       GP (synthesis, RCGP)
+      ╱    │    ╲
+  Brief  Weekly  Monthly
+         MDT     strategic
               ╲
-            Tasks → Apple Reminders
+        Tasks → Apple Reminders
+              ╲
+         PDF-экспорт (для живого врача)
 ```
 
 Подробности: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -182,10 +188,12 @@ MIT. См. [LICENSE](LICENSE).
 <a name="english"></a>
 ## English
 
-**health-mdt** is a multi-agent personal health assistant. 8 LLM specialists + a GP
-coordinator agent produce daily briefs, weekly MDT reports grounded in PubMed evidence,
-and tasks exported to Apple Reminders. Reads from Oura, Apple Health XML, medical
-documents (via Claude vision) and free-text check-ins.
+**health-mdt** is a multi-agent personal health assistant. 9 LLM specialists + 4
+lifestyle coaches under a GP coordinator agent produce daily briefs, weekly MDT
+reports grounded in PubMed + Semantic Scholar evidence, monthly strategic reviews,
+PDF exports for real-physician visits, and tasks exported to Apple Reminders. Reads
+from Oura, Apple Health XML, medical documents (via Claude vision) and free-text
+check-ins. Single-user (PIN) or multi-user (Google OAuth).
 
 Deploy in 2 minutes on any host with Docker:
 

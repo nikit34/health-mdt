@@ -36,14 +36,28 @@ if [[ ! -f .env ]]; then
   info ".env не найден — создаю из шаблона"
   cp .env.example .env
 
-  # Interactive setup for ANTHROPIC_API_KEY
-  if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+  # Interactive setup for Claude credentials.
+  # Option A (preferred): setup token — uses Claude Pro/Max subscription, no API billing.
+  # Option B: classic API key — pay-per-use.
+  if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
     echo ""
-    echo "Вставь Anthropic API key (получить на https://console.anthropic.com)."
-    echo "Пустая строка — продолжить без ключа (агенты не будут работать, но UI поднимется):"
-    read -r -p "ANTHROPIC_API_KEY: " USER_KEY
-    if [[ -n "$USER_KEY" ]]; then
-      sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$USER_KEY|" .env && rm .env.bak
+    echo "Нужны Claude-учётные данные. Варианты:"
+    echo "  1) Setup token — используй подписку Claude Pro/Max. Получи через 'claude setup-token'."
+    echo "  2) API key     — pay-per-use. Получи на https://console.anthropic.com"
+    echo ""
+    echo "Что впишешь — то и будет использовано. Пустая строка — продолжить без LLM."
+    read -r -p "CLAUDE_CODE_OAUTH_TOKEN (или Enter чтобы ввести API key): " USER_TOKEN
+    if [[ -n "$USER_TOKEN" ]]; then
+      sed -i.bak "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$USER_TOKEN|" .env && rm .env.bak
+      ok "Setup token записан (агенты пойдут через подписку)"
+    else
+      read -r -p "ANTHROPIC_API_KEY: " USER_KEY
+      if [[ -n "$USER_KEY" ]]; then
+        sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$USER_KEY|" .env && rm .env.bak
+        ok "API key записан"
+      else
+        warn "Без учётных данных агенты не заработают — UI всё равно поднимется"
+      fi
     fi
   fi
 

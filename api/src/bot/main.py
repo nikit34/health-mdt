@@ -122,7 +122,10 @@ async def cmd_brief(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     settings = get_settings()
     if not settings.has_llm:
-        await update.message.reply_text("LLM не настроен — нужен ANTHROPIC_API_KEY в .env.")
+        await update.message.reply_text(
+            "LLM не настроен — задай CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`) "
+            "или ANTHROPIC_API_KEY в .env."
+        )
         return
     await update.message.reply_text("Готовлю бриф…")
     with Session(engine) as s:

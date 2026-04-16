@@ -109,6 +109,33 @@ export const api = {
     },
   },
 
+  medications: {
+    list: (include_stopped = false) =>
+      request<{
+        id: number;
+        name: string;
+        dose: string;
+        frequency: string;
+        started_on: string | null;
+        stopped_on: string | null;
+        notes: string;
+        reminder_time: string | null;
+        is_active: boolean;
+      }[]>(`/medications?include_stopped=${include_stopped}`),
+    create: (body: {
+      name: string;
+      dose?: string;
+      frequency?: string;
+      started_on?: string;
+      stopped_on?: string;
+      notes?: string;
+      reminder_time?: string;
+    }) => request<any>("/medications", { method: "POST", body: JSON.stringify(body) }),
+    update: (id: number, body: any) =>
+      request<any>(`/medications/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    delete: (id: number) => request<any>(`/medications/${id}`, { method: "DELETE" }),
+  },
+
   sources: {
     ouraSync: () => request<any>("/sources/oura/sync", { method: "POST" }),
     appleHealthImport: (file: File) => {
@@ -119,26 +146,45 @@ export const api = {
   },
 
   chat: {
-    ask: (question: string, window_days = 14) =>
-      request<{ answer: string; confidence: number; safety_flags: string[]; follow_ups: string[] }>("/chat/ask", {
+    ask: (question: string, opts: { window_days?: number; conversation_id?: number } = {}) =>
+      request<{
+        conversation_id: number;
+        answer: string;
+        confidence: number;
+        safety_flags: string[];
+        follow_ups: string[];
+      }>("/chat/ask", {
         method: "POST",
-        body: JSON.stringify({ question, window_days }),
+        body: JSON.stringify({
+          question,
+          window_days: opts.window_days ?? 14,
+          conversation_id: opts.conversation_id ?? null,
+        }),
       }),
     streamAsk: (
       question: string,
+      onStart: (conversation_id: number) => void,
       onChunk: (text: string) => void,
       onDone: () => void,
       onError: (err: string) => void,
-      window_days = 14,
+      opts: { window_days?: number; conversation_id?: number } = {},
     ): (() => void) => {
       const params = new URLSearchParams({
         question,
-        window_days: String(window_days),
+        window_days: String(opts.window_days ?? 14),
         session: (typeof window !== "undefined" && window.localStorage.getItem("hmdt_session")) || "",
       });
+      if (opts.conversation_id) params.set("conversation_id", String(opts.conversation_id));
       const url = `${BASE}/chat/ask/stream?${params.toString()}`;
       const source = new EventSource(url);
-      source.addEventListener("start", () => {});
+      source.addEventListener("start", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.conversation_id) onStart(data.conversation_id);
+        } catch {
+          /* ignore */
+        }
+      });
       source.addEventListener("chunk", (e: MessageEvent) => onChunk(e.data));
       source.addEventListener("done", () => {
         source.close();
@@ -149,6 +195,23 @@ export const api = {
         onError(typeof e?.data === "string" ? e.data : "stream_error");
       });
       return () => source.close();
+    },
+    conversations: {
+      list: () => request<{ id: number; title: string; updated_at: string }[]>("/chat/conversations"),
+      get: (id: number) =>
+        request<{
+          id: number;
+          title: string;
+          updated_at: string;
+          messages: {
+            id: number;
+            role: "user" | "assistant";
+            content: string;
+            meta: { safety_flags?: string[]; follow_ups?: string[]; confidence?: number; partial?: boolean };
+            created_at: string;
+          }[];
+        }>(`/chat/conversations/${id}`),
+      archive: (id: number) => request<{ ok: boolean }>(`/chat/conversations/${id}`, { method: "DELETE" }),
     },
   },
 };

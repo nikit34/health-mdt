@@ -44,6 +44,7 @@ def status(
             "telegram": s.has_telegram,
             "oauth": s.has_oauth,
         },
+        "llm_auth_mode": s.llm_auth_mode,  # 'setup_token' | 'api_key' | 'none'
         "user_onboarded": user_onboarded,
         "authenticated": user is not None,
         "user": {

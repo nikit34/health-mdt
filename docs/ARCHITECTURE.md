@@ -25,25 +25,25 @@
                                         │
               ┌─────────────┬───────────┼───────────┬──────────────┐
               ▼             ▼           ▼           ▼              ▼
-          Sleep/Move/Stress/Recovery    Cardiologist  Endocrinologist   ...
-          (lifestyle agents)            (MDT specialists)
+          Sleep/Move/Stress/Recovery    9 специалистов (Cardio/Endo/Nutr/Psy/
+          (lifestyle coaches)            Onco/Gastro/Hem/Nephro/Pulmo)
                                         │
                                         ▼
                                     GP synthesis
-                                  (SOAP + problem list
-                                  + safety net + plan)
+                                  (RCGP: SOAP + problem list
+                                  + safety net + plan + watchful waiting)
                                         │
-                   ┌────────────────────┼────────────────────┐
-                   ▼                    ▼                    ▼
-             Daily brief          Weekly MDT            Task lifecycle
-                                                       (→ Apple Reminders)
+             ┌──────────────┬───────────┼──────────────┬──────────────┐
+             ▼              ▼           ▼              ▼              ▼
+        Daily brief   Weekly MDT   Monthly review  Task lifecycle   PDF
+        (4-7 sent.)   (consilium)  (Opus, 90 дн)   (→ Reminders)   (для врача)
 
-          ┌──────────────────────┐         ┌──────────────────────┐
-          │   Data ingest        │         │   Evidence           │
-          │  • Oura API          │         │  • PubMed API        │
-          │  • Apple Health XML  │         │  (cached per query)  │
-          │  • Documents (vision)│         └──────────────────────┘
-          │  • User check-ins    │
+          ┌──────────────────────┐         ┌─────────────────────────────┐
+          │   Data ingest        │         │   Evidence                  │
+          │  • Oura API          │         │  • PubMed E-utils           │
+          │  • Apple Health XML  │         │  • Semantic Scholar API     │
+          │  • Documents (vision)│         │  (parallel, cache 14d)      │
+          │  • User check-ins    │         └─────────────────────────────┘
           └──────────────────────┘
 ```
 
@@ -109,11 +109,12 @@
 
 | Выбор | Альтернатива | Почему |
 |---|---|---|
-| SQLite + SQLModel | Postgres + Supabase | Zero-config; один volume; достаточно для single-user MVP |
+| SQLite + SQLModel | Postgres + Supabase | Zero-config; один volume; SQLModel портативен — смена `DATABASE_URL` без изменения кода |
 | Python 3.12 + FastAPI | Bun/TypeScript backend | Лучшая экосистема для AI/scientific (lxml, PubMed parsers, Anthropic SDK) |
 | Anthropic SDK напрямую | LangGraph / LangChain | Меньше магии; полный контроль над prompt caching и traces |
-| PIN-auth | OAuth / email | Single-user MVP — PIN достаточно, деплой за 2 минуты |
-| 4 специалиста (не 9) | Полный MDT из поста | MVP-фокус; добавить остальных — одна строка в `registry.py` |
+| PIN + OAuth (опц.) | только PIN | PIN — быстрый MVP деплой; OAuth — когда нужно дать доступ семье/команде, одной env-переменной |
+| 9 специалистов | 4 (как в MVP) | Полный охват систем из исходного поста; каждый — по своей клинической методологии |
+| Semantic Scholar вместо Google Scholar | только PubMed | Есть официальное API, покрывает гайдлайны и препринты; PubMed тоже остаётся для узко-клинических запросов |
 | Caddy | nginx + certbot | Автоматический HTTPS из коробки, одна строка конфига |
 | Next.js standalone output | SPA + static hosting | SSR даст быстрый TTI на мобилках, где чаще заходят через QR |
 | Prompt caching ephemeral | без кэша | Стабильные system prompts = ~90% экономии токенов на репетитивных запусках |
@@ -124,7 +125,5 @@
 - **Больше специалистов**: добавить в `agents/registry.py`, пополнить `MDT_SPECIALISTS`.
 - **Больше источников**: новый модуль в `src/integrations/`, маршрут в `routes/sources.py`,
   форма в `web/src/app/onboarding`.
-- **Мульти-пользовательский режим**: поменять PIN-auth на OAuth, `User` уже индексирован.
 - **Постгрес**: поменять `DATABASE_URL`, модели SQLModel уже портативны.
-- **Streaming responses**: `sse_starlette` подключён — нужен только handler для стриминга
-  ответа GP в вебе.
+- **Медикаменты/трекинг доз**: новая таблица `Medication`, интеграция в context.

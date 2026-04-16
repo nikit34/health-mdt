@@ -57,7 +57,17 @@ export default function SettingsPage() {
 
       <Card title="Интеграции">
         <ul className="space-y-2 text-sm">
-          <Integration label="Anthropic LLM" ok={status?.capabilities?.llm} hint="ANTHROPIC_API_KEY в .env" />
+          <Integration
+            label="Claude LLM"
+            ok={status?.capabilities?.llm}
+            hint={
+              status?.llm_auth_mode === "setup_token"
+                ? "Через setup token (подписка Pro/Max)"
+                : status?.llm_auth_mode === "api_key"
+                ? "Через ANTHROPIC_API_KEY (pay-per-use)"
+                : "Задай CLAUDE_CODE_OAUTH_TOKEN или ANTHROPIC_API_KEY в .env"
+            }
+          />
           <Integration label="Oura" ok={status?.capabilities?.oura} hint="OURA_PERSONAL_ACCESS_TOKEN в .env" />
           <Integration label="Telegram" ok={status?.capabilities?.telegram} hint={
             me.telegram_chat_id ? `Привязан chat_id ${me.telegram_chat_id}` : "Настрой TELEGRAM_BOT_TOKEN и отправь /start <PIN>"

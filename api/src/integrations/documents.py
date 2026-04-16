@@ -11,7 +11,7 @@ from anthropic import Anthropic
 from pypdf import PdfReader
 from sqlmodel import Session
 
-from ..config import get_settings
+from ..config import anthropic_client_kwargs, get_settings
 from ..db import Document, LabResult, User
 
 log = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def process_medical_document(
     """Run vision/text extraction → persist Document + LabResults."""
     settings = get_settings()
     if not settings.has_llm:
-        raise RuntimeError("ANTHROPIC_API_KEY required for document processing")
+        raise RuntimeError("LLM credentials required for document processing")
 
     doc = Document(
         user_id=user.id,
@@ -74,7 +74,7 @@ def process_medical_document(
 
     try:
         content = _build_content(file_path, mime)
-        client = Anthropic(api_key=settings.anthropic_api_key)
+        client = Anthropic(**anthropic_client_kwargs(settings))
         resp = client.messages.create(
             model=settings.agent_model,
             max_tokens=3500,

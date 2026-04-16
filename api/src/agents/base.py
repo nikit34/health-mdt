@@ -13,12 +13,38 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from anthropic import Anthropic
+from anthropic import (
+    Anthropic,
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    RateLimitError,
+)
 from anthropic.types import MessageParam
+from tenacity import (
+    RetryError,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-from ..config import get_settings
+from ..config import anthropic_client_kwargs, get_settings
 
 log = logging.getLogger(__name__)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Retry on transient errors only: rate limits, timeouts, 5xx, network blips.
+
+    Do NOT retry 4xx bad-request errors — those won't fix themselves and cost money.
+    """
+    if isinstance(exc, (RateLimitError, APITimeoutError, APIConnectionError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        status = getattr(exc, "status_code", 0) or 0
+        return status >= 500 or status == 429
+    return False
 
 
 @dataclass
@@ -69,13 +95,23 @@ class Agent:
         self.model = model or self._settings.agent_model
         self.max_tokens = max_tokens
 
+    def clone(self, *, model: str | None = None, max_tokens: int | None = None) -> "Agent":
+        """Return a new Agent with same prompt but tweaked model/tokens.
+
+        Used for `kind='monthly'` MDT where GP synthesis uses Opus for deeper reasoning
+        over longer windows without duplicating the system prompt.
+        """
+        return Agent(
+            name=self.name,
+            role=self.role,
+            system_prompt=self.system_prompt,
+            model=model or self.model,
+            max_tokens=max_tokens or self.max_tokens,
+        )
+
     def _client(self) -> Anthropic:
-        if not self._settings.anthropic_api_key:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY not set. Agents cannot run without it. "
-                "Set it in .env or provide via environment."
-            )
-        return Anthropic(api_key=self._settings.anthropic_api_key)
+        """Build Anthropic client. Setup token wins over API key when both are set."""
+        return Anthropic(**anthropic_client_kwargs(self._settings))
 
     def _cached_system(self) -> list[dict]:
         """System prompt as a list with cache_control — stable content is cached ~90% cheaper."""
@@ -123,12 +159,11 @@ class Agent:
         messages: list[MessageParam] = [{"role": "user", "content": user_message}]
 
         log.info("Running agent %s (%s)", self.name, self.role)
-        resp = client.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            system=self._cached_system(),
-            messages=messages,
-        )
+        try:
+            resp = self._call_with_retry(client, messages)
+        except RetryError as err:
+            last = err.last_attempt.exception() if err.last_attempt else None
+            raise RuntimeError(f"Agent {self.name} failed after retries: {last}") from last
 
         # Extract text content
         text = "".join(block.text for block in resp.content if block.type == "text")
@@ -153,6 +188,20 @@ class Agent:
                 "stop_reason": resp.stop_reason,
                 "model": resp.model,
             },
+        )
+
+    @retry(
+        retry=retry_if_exception(_is_retryable),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1.5, min=1, max=20),
+        reraise=True,
+    )
+    def _call_with_retry(self, client: Anthropic, messages: list[MessageParam]):
+        return client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self._cached_system(),
+            messages=messages,
         )
 
     def stream(self, user_message: str, system_override: str | None = None) -> Iterator[str]:

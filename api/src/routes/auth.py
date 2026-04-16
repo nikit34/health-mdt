@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from ..auth_deps import (
+    ensure_single_user_id,
     issue_oauth_session,
     issue_pin_session,
     pin_session_store,
@@ -51,17 +52,21 @@ def _get_oauth() -> OAuth:
 # --- PIN mode ---
 
 @router.post("/login")
-def login(payload: dict) -> dict:
+def login(
+    payload: dict,
+    session: Session = Depends(get_session),
+) -> dict:
     settings = get_settings()
     if settings.has_oauth:
         raise HTTPException(400, "auth_mode=oauth — use /auth/oauth/google")
     pin = str(payload.get("pin", "")).strip()
     expected = settings.access_pin.strip()
+    uid = ensure_single_user_id(session)
     if not expected:
-        return {"token": issue_pin_session(), "mode": "open"}
+        return {"token": issue_pin_session(uid), "mode": "open"}
     if not _constant_time_equals(pin, expected):
         raise HTTPException(status_code=401, detail="invalid_pin")
-    return {"token": issue_pin_session(), "mode": "authenticated"}
+    return {"token": issue_pin_session(uid), "mode": "authenticated"}
 
 
 @router.post("/logout")

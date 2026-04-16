@@ -10,7 +10,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Required for agents to work; web still starts without it.
+    # One of the two must be set for agents to work. Setup token is preferred —
+    # it uses a Claude Pro/Max subscription (no pay-per-use API billing).
+    #
+    # Generate with:  claude setup-token
+    # Then paste output into CLAUDE_CODE_OAUTH_TOKEN.
+    claude_code_oauth_token: str = ""
+    # Pay-per-use API key — fallback if no setup token is configured.
     anthropic_api_key: str = ""
 
     # Access control
@@ -50,7 +56,17 @@ class Settings(BaseSettings):
 
     @property
     def has_llm(self) -> bool:
-        return bool(self.anthropic_api_key)
+        """True if either auth method is configured."""
+        return bool(self.claude_code_oauth_token) or bool(self.anthropic_api_key)
+
+    @property
+    def llm_auth_mode(self) -> str:
+        """Reports which auth the client will use. Useful for UI hints."""
+        if self.claude_code_oauth_token:
+            return "setup_token"
+        if self.anthropic_api_key:
+            return "api_key"
+        return "none"
 
     @property
     def has_oura(self) -> bool:
@@ -73,6 +89,20 @@ class Settings(BaseSettings):
         if not self.oauth_allowed_emails.strip():
             return []
         return [e.strip().lower() for e in self.oauth_allowed_emails.split(",") if e.strip()]
+
+
+def anthropic_client_kwargs(settings: "Settings") -> dict:
+    """Return kwargs for `Anthropic(...)` — setup token preferred, api_key fallback.
+
+    Kept outside Settings so integrations don't import the SDK just to type-hint.
+    """
+    if settings.claude_code_oauth_token:
+        return {"auth_token": settings.claude_code_oauth_token}
+    if settings.anthropic_api_key:
+        return {"api_key": settings.anthropic_api_key}
+    raise RuntimeError(
+        "No LLM credentials. Set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in .env."
+    )
 
 
 @lru_cache

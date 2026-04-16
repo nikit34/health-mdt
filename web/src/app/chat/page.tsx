@@ -11,24 +11,88 @@ type Msg = {
   confidence?: number;
   safety_flags?: string[];
   follow_ups?: string[];
+  partial?: boolean;
 };
+
+type ConvMeta = { id: number; title: string; updated_at: string };
+
+const ACTIVE_KEY = "hmdt_active_conversation";
 
 export default function ChatPage() {
   const [history, setHistory] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<ConvMeta[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<(() => void) | null>(null);
 
+  // Rehydrate active conversation on mount
   useEffect(() => {
+    refreshConversations();
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_KEY) : null;
+    if (saved) {
+      const id = parseInt(saved, 10);
+      if (!Number.isNaN(id)) loadConversation(id);
+    }
     return () => cancelRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function refreshConversations() {
+    try {
+      const list = await api.chat.conversations.list();
+      setConversations(list);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function loadConversation(id: number) {
+    try {
+      const conv = await api.chat.conversations.get(id);
+      setConversationId(id);
+      window.localStorage.setItem(ACTIVE_KEY, String(id));
+      setHistory(
+        conv.messages.map((m) => ({
+          role: m.role === "assistant" ? "gp" : "user",
+          text: m.content,
+          safety_flags: m.meta?.safety_flags,
+          follow_ups: m.meta?.follow_ups,
+          confidence: m.meta?.confidence,
+          partial: m.meta?.partial,
+        })),
+      );
+      setSidebarOpen(false);
+    } catch {
+      // Conversation missing — start fresh
+      startNewConversation();
+    }
+  }
+
+  function startNewConversation() {
+    setConversationId(null);
+    setHistory([]);
+    window.localStorage.removeItem(ACTIVE_KEY);
+    setSidebarOpen(false);
+  }
+
+  async function archiveConversation(id: number) {
+    try {
+      await api.chat.conversations.archive(id);
+      if (conversationId === id) startNewConversation();
+      await refreshConversations();
+    } catch {
+      /* ignore */
+    }
+  }
 
   function stop() {
     cancelRef.current?.();
     cancelRef.current = null;
     setBusy(false);
-    setHistory((h) => h.map((m, i) => (i === h.length - 1 && m.streaming ? { ...m, streaming: false } : m)));
+    setHistory((h) => h.map((m, i) => (i === h.length - 1 && m.streaming ? { ...m, streaming: false, partial: true } : m)));
   }
 
   function scroll() {
@@ -45,9 +109,14 @@ export default function ChatPage() {
     setBusy(true);
     scroll();
 
-    // Extract safety flag from final chunk (pattern: "⚠ ...")
     cancelRef.current = api.chat.streamAsk(
       q,
+      (cid) => {
+        if (cid !== conversationId) {
+          setConversationId(cid);
+          window.localStorage.setItem(ACTIVE_KEY, String(cid));
+        }
+      },
       (chunk) => {
         setHistory((h) => {
           const last = h[h.length - 1];
@@ -60,12 +129,12 @@ export default function ChatPage() {
         setHistory((h) => {
           const last = h[h.length - 1];
           if (!last) return h;
-          // Extract ⚠ safety lines from text
           const warns = Array.from(last.text.matchAll(/⚠\s*([^\n]+)/g)).map((m) => m[1].trim());
           return [...h.slice(0, -1), { ...last, streaming: false, safety_flags: warns }];
         });
         setBusy(false);
         cancelRef.current = null;
+        refreshConversations();
       },
       (err) => {
         setHistory((h) => {
@@ -76,17 +145,67 @@ export default function ChatPage() {
         setBusy(false);
         cancelRef.current = null;
       },
+      { conversation_id: conversationId ?? undefined },
     );
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
+    <div className="flex h-[calc(100vh-8rem)] gap-3">
+      {sidebarOpen && (
+        <aside className="w-64 shrink-0 overflow-y-auto rounded-lg border border-border bg-bg-elevated p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-fg-muted">История</span>
+            <button onClick={startNewConversation} className="text-xs text-accent hover:underline">
+              + новый
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {conversations.map((c) => (
+              <li key={c.id}>
+                <div
+                  className={`group flex items-center justify-between rounded px-2 py-1.5 text-sm ${
+                    c.id === conversationId ? "bg-accent/20 text-fg" : "hover:bg-bg text-fg-muted"
+                  }`}
+                >
+                  <button onClick={() => loadConversation(c.id)} className="flex-1 truncate text-left">
+                    {c.title || "Без названия"}
+                  </button>
+                  <button
+                    onClick={() => archiveConversation(c.id)}
+                    className="ml-2 hidden text-xs text-fg-faint hover:text-fg group-hover:inline"
+                    title="Архивировать"
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+            {conversations.length === 0 && (
+              <li className="px-2 py-1.5 text-xs text-fg-faint">Пока пусто</li>
+            )}
+          </ul>
+        </aside>
+      )}
       <Card title="Спросить GP" className="flex flex-1 flex-col">
+        <div className="mb-2 flex items-center justify-between">
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            className="text-xs text-fg-muted hover:text-fg"
+          >
+            {sidebarOpen ? "← скрыть историю" : "история →"}
+          </button>
+          {history.length > 0 && (
+            <button onClick={startNewConversation} className="text-xs text-accent hover:underline">
+              новый диалог
+            </button>
+          )}
+        </div>
         <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto pr-1">
           {history.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <p className="text-sm text-fg-muted">
                 Спроси про свои данные — GP ответит, опираясь на метрики и анализы.
+                Следующие вопросы учитывают историю диалога.
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {[
@@ -156,6 +275,9 @@ function Bubble({ msg }: { msg: Msg }) {
             {msg.text}
             {msg.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />}
           </p>
+          {msg.partial && !msg.streaming && (
+            <p className="mt-2 text-[11px] italic text-fg-faint">ответ прерван</p>
+          )}
         </div>
         {msg.safety_flags && msg.safety_flags.length > 0 && (
           <div className="flex flex-wrap gap-1">

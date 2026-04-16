@@ -65,6 +65,11 @@ def run_mdt_consilium(
     ctx = build_context(session, user, window_days=window_days)
     ctx_dict = ctx.to_dict()
 
+    # Monthly review: include prior weekly reports as "recent consilia" so the
+    # GP can retrospect on what was raised and whether it resolved.
+    if kind == "monthly":
+        ctx_dict["prior_reports"] = _prior_reports_for_retrospect(session, user, limit=5)
+
     # Step 1: lifestyle agents — they get raw context
     lifestyle_notes = _run_parallel(LIFESTYLE_AGENTS, ctx_dict)
     ctx_dict["lifestyle_notes"] = [
@@ -80,11 +85,9 @@ def run_mdt_consilium(
     for r in specialist_notes:
         all_queries.update(r.evidence_queries[:2])  # cap per agent
     queries_list = list(all_queries)[:8]
-    pmids: list[str] = []
-    scholar_records: list[dict] = []
+    pubmed_map: dict[str, list[str]] = {}
+    scholar_map: dict[str, list[dict]] = {}
     if fetch_evidence and queries_list:
-        pubmed_map: dict[str, list[str]] = {}
-        scholar_map: dict[str, list[dict]] = {}
         with cf.ThreadPoolExecutor(max_workers=2) as pool:
             fut_pm = pool.submit(fetch_pubmed_evidence, queries_list, session=session)
             fut_ss = pool.submit(fetch_scholar_evidence, queries_list, session=session)
@@ -97,14 +100,17 @@ def run_mdt_consilium(
             except Exception as e:
                 log.warning("Semantic Scholar fetch failed: %s", e)
 
-        for pmid_list in pubmed_map.values():
-            pmids.extend(pmid_list)
-        for records in scholar_map.values():
-            scholar_records.extend(records)
-        # Attach pmids back to specialists whose queries hit
+        # Attach PMIDs back to specialists whose queries hit
         for r in specialist_notes:
             for q in r.evidence_queries:
                 r.evidence_pmids.extend(pubmed_map.get(q, []))
+
+    # Dedup evidence: one record per PMID (PubMed wins — richer abstract),
+    # fall back to Semantic Scholar paperId when no PMID. Gives GP a single
+    # canonical list of references instead of overlapping noise.
+    unified_evidence = _unify_evidence(pubmed_map, scholar_map, session)
+    pmids = [e["pmid"] for e in unified_evidence if e.get("pmid")]
+    scholar_records = [e for e in unified_evidence if not e.get("pmid") and e.get("ss_id")]
 
     # Step 4: GP synthesis — collate everything
     gp_payload = {
@@ -122,27 +128,49 @@ def run_mdt_consilium(
             }
             for r in specialist_notes
         ],
-        "scholar_evidence": [
-            {"title": s["title"], "venue": s.get("journal"), "year": s.get("year"), "citations": s.get("citations", 0)}
-            for s in scholar_records[:10]
+        "evidence": [
+            {
+                "ref": e["pmid"] or e.get("ss_id", ""),
+                "title": e["title"],
+                "venue": e.get("journal", ""),
+                "year": e.get("year"),
+                "source": e.get("source", ""),
+                "url": e.get("url", ""),
+            }
+            for e in unified_evidence[:12]
         ],
         "instruction": (
             f"Составь {kind} GP-отчёт. Верни JSON по схеме из system-промпта "
             "(gp_synthesis, problem_list, plan, safety_net, evidence_pmids). "
-            "Не менее 2 safety-net триггеров. plan.action — максимум 5 задач, максимально конкретные."
+            "Не менее 2 safety-net триггеров. plan.action — максимум 5 задач, максимально конкретные. "
+            "В evidence_pmids включай только PMID из списка evidence[].ref (те у которых source='pubmed')."
         ),
     }
-    gp_response = GP_AGENT.run(gp_payload)
+    # Monthly review uses Opus for deeper trend synthesis over 90-day windows.
+    if kind == "monthly":
+        from ..config import get_settings
+        gp_agent = GP_AGENT.clone(
+            model=get_settings().synthesis_model,
+            max_tokens=4500,
+        )
+        gp_payload["instruction"] = (
+            "Составь месячный стратегический обзор (kind=monthly). Фокус: "
+            "куда движемся за 30-90 дней, какие тренды лабов/метрик устойчивы, "
+            "что из прошлых problem_list резолвилось, что осталось, что новое появилось. "
+            "prior_reports в контексте — предыдущие weekly MDT, используй для ретроспективы. "
+            "Верни JSON по той же схеме (gp_synthesis — 5-8 абзацев; problem_list обновлённый; "
+            "plan.action — 3-5 СТРАТЕГИЧЕСКИХ задач на месяц; safety_net минимум 3)."
+        )
+    else:
+        gp_agent = GP_AGENT
+    gp_response = gp_agent.run(gp_payload)
     gp_raw = gp_response.raw
     # GP returns richer structure — parse from narrative-style JSON
     gp_parsed = _parse_gp_output(gp_response)
 
-    # Step 5: persist
-    # Merge evidence: PubMed PMIDs + Scholar records (stored as PMID when available, or SS-URL)
-    scholar_refs = [s for s in scholar_records if s.get("title")]
-    all_evidence_keys = list(dict.fromkeys(
-        pmids + gp_parsed.get("evidence_pmids", []) + [s["pmid"] for s in scholar_refs if s.get("pmid")]
-    ))
+    # Step 5: persist — evidence_pmids already deduplicated upstream
+    gp_cited = [p for p in gp_parsed.get("evidence_pmids", []) if p]
+    all_evidence_keys = list(dict.fromkeys(pmids + gp_cited))
     report = MdtReport(
         user_id=user.id,
         kind=kind,
@@ -240,10 +268,168 @@ def generate_daily_brief(
     session.add(b)
     session.commit()
     session.refresh(b)
+
+    # Coaching microtasks: each lifestyle agent can emit at most 1 recommendation.
+    # We promote them directly to Task, deduplicating against open tasks with the
+    # same title (so the same reminder doesn't accumulate day over day).
+    _spawn_coaching_tasks(session, user, notes)
+
     return b
 
 
+def _spawn_coaching_tasks(session: Session, user: User, notes: list[AgentResponse]) -> None:
+    """Create at most 1 open task per lifestyle agent from today's recommendations.
+
+    Deduplication rules:
+    - Skip if an open task with the same title exists for this user.
+    - Skip if the same agent already created an open task in the last 3 days
+      (avoids chaining daily variants of the same advice).
+    """
+    from datetime import timedelta
+    three_days_ago = datetime.utcnow() - timedelta(days=3)
+    for r in notes:
+        if not r.recommendations:
+            continue
+        item = r.recommendations[0]  # we enforce max=1 in prompt
+        title = (item.get("title") or "").strip()
+        if not title:
+            continue
+        created_by = f"coach:{r.agent_name}"
+        # Recent-dup check
+        recent = session.exec(
+            select(Task).where(
+                Task.user_id == user.id,
+                Task.created_by == created_by,
+                Task.created_at >= three_days_ago,
+                Task.status == "open",
+            )
+        ).first()
+        if recent:
+            continue
+        # Title-dup check
+        same = session.exec(
+            select(Task).where(
+                Task.user_id == user.id,
+                Task.title == title,
+                Task.status == "open",
+            )
+        ).first()
+        if same:
+            continue
+        task = Task(
+            user_id=user.id,
+            created_by=created_by,
+            title=title[:200],
+            detail=item.get("detail", ""),
+            priority=item.get("priority", "normal"),
+            due=_parse_due(item.get("due_days")),
+        )
+        session.add(task)
+    session.commit()
+
+
 # --- helpers ---
+
+def _prior_reports_for_retrospect(
+    session: Session, user: User, *, limit: int = 5
+) -> list[dict]:
+    """Recent MDT reports (weekly) for the monthly retrospect. Compact — agents
+    don't need full specialist notes, just problem_list and gp_synthesis snippets.
+    """
+    rows = session.exec(
+        select(MdtReport)
+        .where(MdtReport.user_id == user.id, MdtReport.kind != "monthly")
+        .order_by(MdtReport.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": r.id,
+            "kind": r.kind,
+            "created_at": r.created_at.date().isoformat(),
+            "gp_synthesis_excerpt": (r.gp_synthesis or "")[:800],
+            "problem_list": r.problem_list,
+            "safety_net": r.safety_net,
+        }
+        for r in rows
+    ]
+
+
+def _unify_evidence(
+    pubmed_map: dict[str, list[str]],
+    scholar_map: dict[str, list[dict]],
+    session: Session,
+) -> list[dict]:
+    """Merge PubMed + Semantic Scholar hits into a single dedup'd reference list.
+
+    Dedup rules:
+    - Group by PMID when present (both sources may return the same paper with PMID).
+      PubMed wins for metadata — its cached PubmedEvidence row has a fuller abstract.
+    - When no PMID (Semantic Scholar-only), group by paperId (ss_id).
+    - Keeps first-seen order so the GP sees the most relevant papers first.
+
+    Returns: list of dicts with keys pmid|ss_id, title, journal, year, url, source.
+    """
+    from ..db import PubmedEvidence
+
+    merged: dict[str, dict] = {}
+    order: list[str] = []
+
+    # PubMed first so it claims the PMID key
+    pmid_set = {pmid for pmids in pubmed_map.values() for pmid in pmids if pmid}
+    pm_rows: dict[str, PubmedEvidence] = {}
+    if pmid_set:
+        rows = session.exec(
+            select(PubmedEvidence).where(PubmedEvidence.pmid.in_(list(pmid_set)))
+        ).all()
+        for row in rows:
+            if row.pmid and row.title and row.title != "(no results)":
+                pm_rows.setdefault(row.pmid, row)  # latest cached row per PMID
+
+    for pmid in pmid_set:
+        row = pm_rows.get(pmid)
+        if not row:
+            continue
+        key = f"pmid:{pmid}"
+        if key in merged:
+            continue
+        merged[key] = {
+            "pmid": pmid,
+            "ss_id": "",
+            "title": row.title,
+            "journal": row.journal,
+            "year": row.pub_year,
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+            "source": "pubmed",
+        }
+        order.append(key)
+
+    # Semantic Scholar fills gaps (papers not in PubMed, or with richer venue/citation info)
+    for records in scholar_map.values():
+        for r in records:
+            if not r.get("title"):
+                continue
+            pmid = (r.get("pmid") or "").strip()
+            ss_id = (r.get("ss_id") or "").strip()
+            key = f"pmid:{pmid}" if pmid else f"ss:{ss_id}"
+            if not key.endswith(":") and key in merged:
+                continue  # already have this paper from PubMed — skip
+            if not pmid and not ss_id:
+                continue
+            merged[key] = {
+                "pmid": pmid,
+                "ss_id": ss_id,
+                "title": r["title"],
+                "journal": r.get("journal", ""),
+                "year": r.get("year"),
+                "citations": r.get("citations", 0),
+                "url": r.get("url", ""),
+                "source": "semantic_scholar",
+            }
+            order.append(key)
+
+    return [merged[k] for k in order if k in merged]
+
 
 def _parse_gp_output(resp: AgentResponse) -> dict:
     """GP agent returns a custom schema — read from the full parsed payload."""

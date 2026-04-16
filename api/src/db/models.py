@@ -143,3 +143,51 @@ class PubmedEvidence(SQLModel, table=True):
     authors: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     journal: str = ""
     pub_year: Optional[int] = None
+
+
+class Conversation(SQLModel, table=True):
+    """A chat thread between user and GP — preserves context across turns."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    title: str = ""  # derived from first user message, truncated
+    # When False, skip from history lists (user-archived)
+    active: bool = True
+
+
+class ChatMessage(SQLModel, table=True):
+    """One message in a Conversation."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: int = Field(foreign_key="conversation.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    role: str  # 'user' | 'assistant'
+    content: str
+    # Optional metadata — safety flags, follow-ups extracted from assistant text
+    meta: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class Medication(SQLModel, table=True):
+    """Active or past medication the user is taking.
+
+    Doses are denormalized as free text (e.g. "5 mg") rather than numeric because
+    a lot of real-world meds are "1/2 tab PRN" or "as directed". Agents read `name`
+    + `dose` + `frequency` as strings.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    name: str  # "Metformin", "Vitamin D3"
+    dose: str = ""  # "500 mg", "5000 IU"
+    frequency: str = ""  # "twice daily", "weekly", "as needed"
+    started_on: Optional[date] = None
+    stopped_on: Optional[date] = None
+    notes: str = ""
+    # If populated: local time HH:MM for daily reminder; scheduler creates Task on time.
+    reminder_time: Optional[str] = None
+
+    @property
+    def is_active(self) -> bool:
+        if not self.stopped_on:
+            return True
+        return self.stopped_on >= date.today()

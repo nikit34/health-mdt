@@ -10,6 +10,7 @@ const NAV = [
   { href: "/reports", label: "Отчёты" },
   { href: "/tasks", label: "Задачи" },
   { href: "/chat", label: "Спросить" },
+  { href: "/medications", label: "Лекарства" },
   { href: "/documents", label: "Документы" },
   { href: "/settings", label: "Настройки" },
 ];

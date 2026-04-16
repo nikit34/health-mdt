@@ -1,7 +1,7 @@
 # Fly.io sample config — adjust name and region.
 # Usage:
 #   fly launch --copy-config --name health-mdt-<you>
-#   fly secrets set ANTHROPIC_API_KEY=...
+#   fly secrets set CLAUDE_CODE_OAUTH_TOKEN=...   # или ANTHROPIC_API_KEY=...
 #   fly deploy
 app = "health-mdt"
 primary_region = "ams"
