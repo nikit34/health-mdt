@@ -5,43 +5,49 @@ import Link from "next/link";
 import { api, hasSession } from "@/lib/api";
 import { Card, Stat, Pill, Empty, Button } from "@/components/Card";
 import { Sparkline } from "@/components/Sparkline";
+import { Landing } from "@/components/Landing";
 
-export default function Dashboard() {
+export default function Home() {
+  const [mode, setMode] = useState<"loading" | "landing" | "dashboard">("loading");
   const [status, setStatus] = useState<any>(null);
   const [brief, setBrief] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Unauthenticated prospects see the marketing landing.
+    // Authed users drop into the dashboard exactly as before.
     if (!hasSession()) {
-      window.location.href = "/login";
+      setMode("landing");
       return;
     }
+    setMode("dashboard");
     loadAll();
   }, []);
 
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const [st, br, mt, tk] = await Promise.all([
-        api.status(),
-        api.reports.briefLatest().catch(() => null),
-        api.metrics(14).catch(() => null),
-        api.tasks.list("open").catch(() => []),
-      ]);
-      setStatus(st);
-      setBrief(br);
-      setMetrics(mt);
-      setTasks(tk);
+  if (mode === "loading") {
+    return <div className="skeleton mx-auto mt-24 h-64 w-full max-w-lg" />;
+  }
+  if (mode === "landing") {
+    return <Landing />;
+  }
 
-      if (!st.user_onboarded) {
-        window.location.href = "/onboarding";
-      }
-    } finally {
-      setLoading(false);
+  async function loadAll() {
+    const [st, br, mt, tk] = await Promise.all([
+      api.status(),
+      api.reports.briefLatest().catch(() => null),
+      api.metrics(14).catch(() => null),
+      api.tasks.list("open").catch(() => []),
+    ]);
+    setStatus(st);
+    setBrief(br);
+    setMetrics(mt);
+    setTasks(tk);
+
+    if (!st.user_onboarded) {
+      window.location.href = "/onboarding";
     }
   }
 
@@ -57,7 +63,7 @@ export default function Dashboard() {
     }
   }
 
-  if (loading) {
+  if (!status) {
     return (
       <div className="space-y-4">
         <div className="skeleton h-32 w-full" />

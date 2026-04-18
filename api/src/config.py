@@ -152,10 +152,16 @@ def get_settings() -> Settings:
             try:
                 from pywebpush import webpush  # noqa: F401
                 from py_vapid import Vapid
+                from cryptography.hazmat.primitives import serialization
+                import base64 as _b64
                 v = Vapid()
                 v.generate_keys()
+                raw_public = v.public_key.public_bytes(
+                    encoding=serialization.Encoding.X962,
+                    format=serialization.PublicFormat.UncompressedPoint,
+                )
                 settings.vapid_private_key = v.private_pem().decode()
-                settings.vapid_public_key = v.public_key_urlsafe_base64()
+                settings.vapid_public_key = _b64.urlsafe_b64encode(raw_public).rstrip(b"=").decode()
                 import json as _json
                 vapid_file.write_text(_json.dumps({
                     "private": settings.vapid_private_key,

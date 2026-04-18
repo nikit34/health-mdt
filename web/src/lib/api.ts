@@ -9,14 +9,14 @@ function sessionToken(): string {
   return window.localStorage.getItem("hmdt_session") || "";
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, opts: { publicRoute?: boolean } = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("X-Session", sessionToken());
+  if (!opts.publicRoute) headers.set("X-Session", sessionToken());
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: "no-store" });
-  if (res.status === 401) {
+  if (res.status === 401 && !opts.publicRoute) {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("hmdt_session");
       if (!window.location.pathname.startsWith("/login")) {
@@ -160,6 +160,33 @@ export const api = {
       }),
     unsubscribe: () => request<{ ok: boolean }>("/push/subscribe", { method: "DELETE" }),
     status: () => request<{ enabled: boolean; subscriptions: number }>("/push/status"),
+  },
+
+  public: {
+    demoReport: () =>
+      request<{
+        id: number;
+        created_at: string;
+        kind: string;
+        gp_synthesis: string;
+        problem_list: { problem: string; status: string; since?: string; note?: string }[];
+        safety_net: string[];
+        specialist_notes: Record<string, {
+          role: string;
+          narrative?: string;
+          soap?: { subjective?: string; objective?: string; assessment?: string; plan?: string };
+          recommendations?: { title: string; detail?: string; priority?: string }[];
+          safety_flags?: string[];
+          evidence_pmids?: string[];
+        }>;
+        evidence: { pmid: string; title: string; journal: string; year: number | null; url: string }[];
+        patient: { age: number | null; sex: string | null; context: string };
+      }>("/public/demo-report", {}, { publicRoute: true }),
+    waitlist: (email: string, tier = "", note = "") =>
+      request<{ status: "ok" | "already_on_list" }>("/public/waitlist", {
+        method: "POST",
+        body: JSON.stringify({ email, tier, note }),
+      }, { publicRoute: true }),
   },
 
   chat: {

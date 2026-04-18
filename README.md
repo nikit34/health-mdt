@@ -29,7 +29,58 @@
   Telegram-бот, QR для быстрого доступа.
 - **Auth**: PIN (single-user) или Google OAuth (multi-user) — переключается одной env-переменной.
 
-## Запуск за 2 минуты
+## Прототип для фаундера / инвестора (одна ссылка, ноль онбординга)
+
+Если цель — показать продукт, не логин-флоу: подними стек локально и открой туннель.
+Человек по ссылке попадает на **маркетинг-лендинг** с cardiometabolic позиционированием
+и кнопкой «Посмотреть пример отчёта» — всё без регистрации, PIN-а и API-ключей.
+
+```bash
+# 1. Поднять стек с засеянными данными
+./scripts/demo.sh
+
+# 2. В отдельном терминале — открыть публичный HTTPS-туннель
+cloudflared tunnel --url http://localhost
+# → напечатает URL вида https://xxx-xxx.trycloudflare.com
+```
+
+Отправь этот URL фаундеру. Что он увидит:
+
+- **`/`** — лендинг: hero «Understand your cardiometabolic risk», 3-step как это работает,
+  4 pricing-плана (Free / $9 / $29 / $79), waitlist-форма.
+- **`/demo`** — пример MDT-отчёта (профиль: LDL 3.6, HbA1c 5.9%, семейная ИБС, экс-курильщик).
+  GP-синтез, problem list, safety net, PubMed-ссылки, разворачиваемые ноты 9 специалистов.
+- **Waitlist** — email собирается в SQLite (`WaitlistSignup` таблица), смотреть через
+  `docker compose exec api python -c "from src.db import WaitlistSignup; from src.db.session import engine; from sqlmodel import Session, select; s=Session(engine); print([r.email for r in s.exec(select(WaitlistSignup)).all()])"`.
+
+Если у него нет `cloudflared` — альтернативы: `ngrok http 80`, Tailscale Funnel, или задеплоить
+на VPS (`./scripts/deploy.sh your-domain.com`).
+
+## Посмотреть продукт за 3 минуты (локальное демо)
+
+Нулевой UX-friction: одна команда → браузер открывается на жилом дашборде.
+Никаких API-ключей, Oura-кольца, Apple Health экспортов и онбординга.
+
+```bash
+git clone https://github.com/nikit34/health-mdt.git
+cd health-mdt
+./scripts/demo.sh
+```
+
+Скрипт сам:
+1. Создаст `.env` (без запроса API-ключа).
+2. Сгенерирует PIN и пропишет его в URL-хеш.
+3. Соберёт стек, запустит сид скрипт (`api/src/seed.py`).
+4. Откроет браузер на `http://localhost/#pin=XXXXXX` → auto-login → дашборд.
+
+На дашборде уже: 45 дней метрик, тренды лабов за 12 мес, 3 MDT-отчёта (monthly + 2 weekly),
+7 дневных брифов, 6 открытых задач, 2 диалога с GP в истории, 3 препарата, 2 документа.
+Кликай по пунктам меню — все страницы населены.
+
+Живая генерация (бриф, MDT, стриминг-чат) потребует Claude-ключ — добавь его позже и
+перезапусти `api`.
+
+## Полный запуск с реальными данными
 
 Требуется: **Docker** + **git**.
 

@@ -24,6 +24,7 @@ export function Navbar() {
   }, [pathname]);
 
   if (pathname === "/login" || pathname === "/onboarding") return null;
+  if (pathname?.startsWith("/demo")) return null;
   if (!logged) return null;
 
   return (

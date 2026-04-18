@@ -183,6 +183,22 @@ class PushSubscription(SQLModel, table=True):
     user_agent: str = ""
 
 
+class WaitlistSignup(SQLModel, table=True):
+    """Landing-page email capture — prospect pool before billing is live.
+
+    No foreign key to User: prospects aren't users yet. IP is stored as a SHA256
+    hash so rate-limiting works without keeping PII.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    email: str = Field(index=True)
+    note: str = ""
+    tier: Optional[str] = None  # 'free' | '9' | '29' | '79' — which plan they clicked
+    ip_hash: str = ""
+    user_agent: str = ""
+    referrer: str = ""
+
+
 class Medication(SQLModel, table=True):
     """Active or past medication the user is taking.
 
