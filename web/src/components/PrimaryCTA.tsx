@@ -94,7 +94,7 @@ export function PublicHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
         <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-accent" />
-          health-mdt
+          Consilium
         </Link>
         <nav className="hidden items-center gap-5 text-sm text-fg-muted md:flex">
           <a href="/#how" className="hover:text-fg">Как работает</a>

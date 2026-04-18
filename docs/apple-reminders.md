@@ -1,13 +1,13 @@
 # Apple Reminders интеграция
 
-Для закрытия цикла «GP предложил задачу → она попала в твой планировщик» в health-mdt
+Для закрытия цикла «GP предложил задачу → она попала в твой планировщик» в Consilium
 используется iOS Shortcut. Один раз поставь — дальше любая задача ⏰ из веба/бота
 создаёт напоминание в приложении Reminders.
 
 ## Установка шортката (iOS/macOS)
 
 1. Открой приложение **Shortcuts (Команды)**.
-2. Создай новый шорткат с именем **HealthMDT Add**.
+2. Создай новый шорткат с именем **Consilium Add**.
 3. Добавь действия:
    - **Get Input from Shortcut** — тип Text.
    - **Split Text** — разделитель: `||`
@@ -23,10 +23,10 @@
 
 ## Как это работает
 
-Каждая задача в health-mdt имеет поле `reminders_url` вида:
+Каждая задача в Consilium имеет поле `reminders_url` вида:
 
 ```
-shortcuts://run-shortcut?name=HealthMDT%20Add&input=Title||Detail||2026-04-22
+shortcuts://run-shortcut?name=Consilium%20Add&input=Title||Detail||2026-04-22
 ```
 
 На iPhone тап по этой ссылке из бота / Safari / веб-интерфейса запустит шорткат

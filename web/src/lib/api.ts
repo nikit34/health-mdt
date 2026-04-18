@@ -6,7 +6,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 function sessionToken(): string {
   if (typeof window === "undefined") return "";
-  return window.localStorage.getItem("hmdt_session") || "";
+  return window.localStorage.getItem("consilium_session") || "";
 }
 
 async function request<T>(path: string, init: RequestInit = {}, opts: { publicRoute?: boolean } = {}): Promise<T> {
@@ -18,7 +18,7 @@ async function request<T>(path: string, init: RequestInit = {}, opts: { publicRo
   const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: "no-store" });
   if (res.status === 401 && !opts.publicRoute) {
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("hmdt_session");
+      window.localStorage.removeItem("consilium_session");
       if (!window.location.pathname.startsWith("/login")) {
         window.location.href = "/login";
       }
@@ -75,7 +75,7 @@ export const api = {
         method: "POST",
       }),
     mdtPdf: async (id: number): Promise<void> => {
-      const token = (typeof window !== "undefined" && window.localStorage.getItem("hmdt_session")) || "";
+      const token = (typeof window !== "undefined" && window.localStorage.getItem("consilium_session")) || "";
       const res = await fetch(`${BASE}/reports/mdt/${id}/pdf`, { headers: { "X-Session": token } });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const blob = await res.blob();
@@ -229,7 +229,7 @@ export const api = {
       const params = new URLSearchParams({
         question,
         window_days: String(opts.window_days ?? 14),
-        session: (typeof window !== "undefined" && window.localStorage.getItem("hmdt_session")) || "",
+        session: (typeof window !== "undefined" && window.localStorage.getItem("consilium_session")) || "",
       });
       if (opts.conversation_id) params.set("conversation_id", String(opts.conversation_id));
       const url = `${BASE}/chat/ask/stream?${params.toString()}`;
@@ -274,11 +274,11 @@ export const api = {
 };
 
 export function setSession(token: string) {
-  if (typeof window !== "undefined") window.localStorage.setItem("hmdt_session", token);
+  if (typeof window !== "undefined") window.localStorage.setItem("consilium_session", token);
 }
 
 export function clearSession() {
-  if (typeof window !== "undefined") window.localStorage.removeItem("hmdt_session");
+  if (typeof window !== "undefined") window.localStorage.removeItem("consilium_session");
 }
 
 export function hasSession(): boolean {

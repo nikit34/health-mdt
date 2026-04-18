@@ -58,7 +58,7 @@ def _render_html(report: MdtReport, user: User | None, evidence: list[PubmedEvid
   size: A4;
   margin: 18mm 15mm 20mm 15mm;
   @top-right {{
-    content: "health-mdt · стр. " counter(page) " из " counter(pages);
+    content: "Consilium · стр. " counter(page) " из " counter(pages);
     font-size: 9pt;
     color: #777;
   }}
@@ -129,7 +129,7 @@ th {{ font-weight: 600; background: #f3f3f3; }}
 {ev}
 
 <div class="disclaimer">
-Отчёт сформирован автоматизированной системой health-mdt на основе данных носимых устройств,
+Отчёт сформирован автоматизированной системой Consilium на основе данных носимых устройств,
 лабораторных результатов и чек-инов пациента. Выводы агентов следует рассматривать
 как информационный вход для очной консультации — не как диагноз или назначение.
 Референсные интервалы и клинические окна валидности указаны рядом с каждым значением

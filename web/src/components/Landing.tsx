@@ -498,7 +498,7 @@ function Footer() {
       <div className="mx-auto max-w-5xl space-y-2">
         <div className="flex items-center justify-center gap-2">
           <span className="h-2 w-2 rounded-full bg-accent" />
-          <span className="font-semibold text-fg">health-mdt</span>
+          <span className="font-semibold text-fg">Consilium</span>
           <span>· cardiometabolic MDT</span>
         </div>
         <p>

@@ -103,7 +103,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if settings.access_pin:
         if not payload or payload != settings.access_pin.strip():
             await update.message.reply_text(
-                "Добро пожаловать в health-mdt.\n\n"
+                "Добро пожаловать в Consilium.\n\n"
                 "Чтобы связать этот чат с твоим аккаунтом, отправь:\n"
                 "`/start <PIN>`\n\n"
                 "PIN ты получил при деплое инстанса.\n\n"

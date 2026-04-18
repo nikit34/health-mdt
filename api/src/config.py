@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_pass: str = ""
-    smtp_from: str = ""  # "Health MDT <noreply@example.com>"
+    smtp_from: str = ""  # "Consilium <noreply@example.com>"
     smtp_tls: bool = True
 
     # Web Push (VAPID) — auto-generated on first start if empty
@@ -81,11 +81,15 @@ class Settings(BaseSettings):
 
     @property
     def llm_auth_mode(self) -> str:
-        """Reports which auth the client will use. Useful for UI hints."""
-        if self.claude_code_oauth_token:
-            return "setup_token"
+        """Reports which auth the client will use. Useful for UI hints.
+
+        Mirrors priority in anthropic_client_kwargs — api_key wins because
+        Messages API doesn't accept Bearer/OAuth directly.
+        """
         if self.anthropic_api_key:
             return "api_key"
+        if self.claude_code_oauth_token:
+            return "setup_token"
         return "none"
 
     @property
@@ -119,18 +123,12 @@ class Settings(BaseSettings):
         return [e.strip().lower() for e in self.oauth_allowed_emails.split(",") if e.strip()]
 
 
-def anthropic_client_kwargs(settings: "Settings") -> dict:
-    """Return kwargs for `Anthropic(...)` — setup token preferred, api_key fallback.
-
-    Kept outside Settings so integrations don't import the SDK just to type-hint.
-    """
-    if settings.claude_code_oauth_token:
-        return {"auth_token": settings.claude_code_oauth_token}
-    if settings.anthropic_api_key:
-        return {"api_key": settings.anthropic_api_key}
-    raise RuntimeError(
-        "No LLM credentials. Set CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in .env."
-    )
+# anthropic_client_kwargs was removed. Agent / vision code now branches at call
+# time between the `anthropic` SDK (api_key) and `claude-agent-sdk` (setup token).
+# See api/src/agents/base.py and api/src/integrations/documents.py for the
+# dual-backend pattern. The raw Anthropic Messages API does not accept
+# Bearer/OAuth tokens — that's why subscription users must go through the
+# `claude` CLI subprocess spawned by claude-agent-sdk.
 
 
 @lru_cache

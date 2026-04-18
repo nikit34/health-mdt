@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="health-mdt",
+    title="Consilium",
     version="0.1.0",
     description="Multi-agent personal health assistant",
     lifespan=lifespan,

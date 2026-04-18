@@ -1,4 +1,4 @@
-# health-mdt
+# Consilium
 
 > Мультиагентный персональный health-ассистент. Разворачивается за 2 минуты,
 > работает с Apple Watch (Health), Withings, медицинскими документами и чек-инами.
@@ -227,7 +227,7 @@ Credentials создаются на [console.cloud.google.com](https://console.c
 - `.env` не коммитится. `data/`, `uploads/` в `.gitignore`.
 - PIN-авторизация (PIN генерируется при деплое, сессии TTL 30 дней).
 
-**Важно**: health-mdt — не медицинский прибор и не заменяет врача. Это инструмент для
+**Важно**: Consilium — не медицинский прибор и не заменяет врача. Это инструмент для
 информированного самонаблюдения. Агенты обучены не ставить диагнозов и давать
 safety-net триггеры для обращения к живому специалисту.
 
@@ -240,7 +240,7 @@ MIT. См. [LICENSE](LICENSE).
 <a name="english"></a>
 ## English
 
-**health-mdt** is a multi-agent personal health assistant. 9 LLM specialists + 4
+**Consilium** is a multi-agent personal health assistant. 9 LLM specialists + 4
 lifestyle coaches under a GP coordinator agent produce daily briefs, weekly MDT
 reports grounded in PubMed + Semantic Scholar evidence, monthly strategic reviews,
 PDF exports for real-physician visits, and tasks exported to Apple Reminders. Reads

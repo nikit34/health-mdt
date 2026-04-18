@@ -16,7 +16,7 @@ export default function LoginPage() {
     if (match) {
       setPin(match[1]);
     } else {
-      const cached = window.localStorage.getItem("hmdt_last_pin") || "";
+      const cached = window.localStorage.getItem("consilium_last_pin") || "";
       if (cached) setPin(cached);
     }
     fetch("/api/auth/mode")
@@ -34,7 +34,7 @@ export default function LoginPage() {
     try {
       const res = await api.login(value);
       setSession(res.token);
-      window.localStorage.setItem("hmdt_last_pin", value);
+      window.localStorage.setItem("consilium_last_pin", value);
       window.location.href = "/onboarding";
     } catch (e: any) {
       setErr("Неверный PIN");
@@ -60,7 +60,7 @@ export default function LoginPage() {
         <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft">
           <span className="h-3 w-3 rounded-full bg-accent" />
         </div>
-        <h1 className="text-lg font-semibold">health-mdt</h1>
+        <h1 className="text-lg font-semibold">Consilium</h1>
         <p className="mt-1 text-sm text-fg-muted">
           {mode === "oauth" ? "Войди через Google." : "Введи PIN, который выдал деплой-скрипт."}
         </p>

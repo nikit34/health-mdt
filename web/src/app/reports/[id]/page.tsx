@@ -25,7 +25,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
     // Dismissal persists in localStorage so we don't nag the same user on every report
     const dismissed =
-      typeof window !== "undefined" && window.localStorage.getItem("hmdt_tg_nudge_dismissed") === "1";
+      typeof window !== "undefined" && window.localStorage.getItem("consilium_tg_nudge_dismissed") === "1";
     if (dismissed) {
       setTg({ show: false, dismissed: true });
       return;
@@ -38,7 +38,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
   function dismissTg() {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("hmdt_tg_nudge_dismissed", "1");
+      window.localStorage.setItem("consilium_tg_nudge_dismissed", "1");
     }
     setTg({ show: false, dismissed: true });
   }

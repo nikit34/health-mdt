@@ -49,7 +49,7 @@ def send_push_to_user(
         "tag": tag,
     }, ensure_ascii=False)
 
-    vapid_claims = {"sub": settings.vapid_mailto or "mailto:noreply@health-mdt.local"}
+    vapid_claims = {"sub": settings.vapid_mailto or "mailto:noreply@consilium.local"}
     sent = 0
     stale_ids: list[int] = []
 

@@ -77,7 +77,7 @@ def format_brief_email(brief_text: str, highlights: list[str], for_date: str) ->
             html += f"<li>{_escape(h)}</li>"
         html += "</ul>"
     html += """<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-<p style="font-size: 12px; color: #888;">health-mdt · Информационный инструмент, не заменяет врача.</p>
+<p style="font-size: 12px; color: #888;">Consilium · Информационный инструмент, не заменяет врача.</p>
 </div>"""
     return plain, html
 
@@ -110,7 +110,7 @@ MDT-отчёт ({kind})
         for s in safety_net:
             html += f'<div style="border-left: 3px solid #a33; padding: 6px 12px; margin: 4px 0; background: #fff9f9;">⚠ {_escape(s)}</div>'
     html += """<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-<p style="font-size: 12px; color: #888;">health-mdt · Информационный инструмент, не заменяет врача.</p>
+<p style="font-size: 12px; color: #888;">Consilium · Информационный инструмент, не заменяет врача.</p>
 </div>"""
     return plain, html
 

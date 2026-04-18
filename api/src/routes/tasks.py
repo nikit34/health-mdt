@@ -116,6 +116,6 @@ def _task_dict(t: Task) -> dict:
 
 
 def _apple_reminders_url(t: Task) -> str:
-    return "shortcuts://run-shortcut?name=HealthMDT%20Add&input=" + urllib.parse.quote(
+    return "shortcuts://run-shortcut?name=Consilium%20Add&input=" + urllib.parse.quote(
         f"{t.title}||{t.detail or ''}||{t.due.isoformat() if t.due else ''}"
     )

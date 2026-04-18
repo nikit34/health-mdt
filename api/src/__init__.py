@@ -1,2 +1,2 @@
-"""health-mdt API package."""
+"""Consilium API package."""
 __version__ = "0.1.0"

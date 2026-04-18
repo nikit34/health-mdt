@@ -16,7 +16,7 @@ type Msg = {
 
 type ConvMeta = { id: number; title: string; updated_at: string };
 
-const ACTIVE_KEY = "hmdt_active_conversation";
+const ACTIVE_KEY = "consilium_active_conversation";
 
 export default function ChatPage() {
   const [history, setHistory] = useState<Msg[]>([]);

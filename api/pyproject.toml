@@ -4,6 +4,13 @@ version = "0.1.0"
 description = "Multi-agent personal health assistant — backend"
 requires-python = ">=3.11"
 dependencies = [
+    # Claude Agent SDK — used when users want to run agents through their
+    # Claude Pro/Max subscription (CLAUDE_CODE_OAUTH_TOKEN). It spawns the
+    # `claude` CLI as a subprocess; the CLI must be installed separately
+    # (see Dockerfile: `npm install -g @anthropic-ai/claude-code`).
+    "claude-agent-sdk>=0.0.22",
+    # anthropic SDK kept for users on ANTHROPIC_API_KEY (pay-per-use) —
+    # direct Messages API calls with prompt caching. Selected at runtime.
     "anthropic>=0.40.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",

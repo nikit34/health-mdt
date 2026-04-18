@@ -1,4 +1,4 @@
-# Архитектура health-mdt
+# Архитектура Consilium
 
 ```
                 ┌────────────────────────────────────────────┐
@@ -86,7 +86,7 @@
 - Lifecycle: open → in_progress → done | dismissed.
 - Follow-up: scheduler раз в сутки выставляет `last_reminded_at` у задач >7 дней в open.
 - Apple Reminders: каждая задача имеет `reminders_url` — `shortcuts://` scheme,
-  который на iOS запускает один шорткат «HealthMDT Add».
+  который на iOS запускает один шорткат «Consilium Add».
 
 ### 6. Reports
 - **Daily brief** — короткий бриф GP, утром 06:30.

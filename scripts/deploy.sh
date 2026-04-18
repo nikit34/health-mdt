@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-click deploy script for health-mdt.
+# One-click deploy script for Consilium.
 #
 #   ./scripts/deploy.sh                     # localhost, prompts for API key
 #   ./scripts/deploy.sh health.example.com  # VPS with a domain, enables HTTPS
@@ -123,7 +123,7 @@ fi
 cat <<EOF
 
 ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
-${GREEN}  health-mdt запущен${NC}
+${GREEN}  Consilium запущен${NC}
 ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
 
   URL:    $URL

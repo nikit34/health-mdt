@@ -5,8 +5,8 @@ import { SessionIntake } from "@/components/SessionIntake";
 
 export const metadata: Metadata = {
   title: {
-    default: "health-mdt · cardiometabolic MDT",
-    template: "%s · health-mdt",
+    default: "Consilium · cardiometabolic MDT",
+    template: "%s · Consilium",
   },
   description: "Персональный мультиагентный health-ассистент — 9 специалистов и GP под одной крышей.",
   // Next.js auto-picks /app/icon.svg for favicon + standard <link> tags

@@ -144,7 +144,7 @@ export default function TasksPage() {
         <p className="text-sm text-fg-muted">
           У каждой задачи есть ссылка-шорткат ⏰, которая создаёт напоминание в iOS Reminders.
           Для этого один раз установи на iPhone шорткат{" "}
-          <span className="font-medium text-fg">«HealthMDT Add»</span> — инструкция в
+          <span className="font-medium text-fg">«Consilium Add»</span> — инструкция в
           репозитории (<code className="text-fg-muted">docs/apple-reminders.md</code>).
         </p>
       </Card>

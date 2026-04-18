@@ -767,7 +767,7 @@ def _seed_tasks(s: Session, user: User, reports: list[MdtReport]) -> None:
        detail="Обсудить 10-летний СС-риск и тактику по LDL с учётом семейной истории.",
        priority="urgent", due=date.today() + timedelta(days=7),
        source_report_id=monthly.id, status="open",
-       reminders_url="shortcuts://run-shortcut?name=HealthMDT%20Add&input="
+       reminders_url="shortcuts://run-shortcut?name=Consilium%20Add&input="
                      "Визит%20к%20кардиологу||SCORE2%20и%20LDL||")
 
     mk(33, created_by="gp", title="Начать пищевой лог на 14 дней",

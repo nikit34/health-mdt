@@ -35,7 +35,7 @@ def pin_session_store() -> dict[str, tuple[int, datetime]]:
 
 def _oauth_serializer() -> URLSafeTimedSerializer:
     s = get_settings()
-    return URLSafeTimedSerializer(s.session_secret or "dev-only-not-for-prod", salt="health-mdt-session")
+    return URLSafeTimedSerializer(s.session_secret or "dev-only-not-for-prod", salt="consilium-session")
 
 
 def issue_oauth_session(user_id: int) -> str:
