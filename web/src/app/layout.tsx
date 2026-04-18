@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     siteName: "Consilium",
     title: "Consilium · cardiometabolic MDT",
     description: DESCRIPTION,
-    // og-image is generated at build time by app/opengraph-image.tsx
+    // og-image is auto-picked from app/opengraph-image.png (file convention)
   },
   twitter: {
     card: "summary_large_image",
