@@ -10,22 +10,19 @@ Flow:
 from __future__ import annotations
 
 import secrets
-import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..auth_deps import get_current_user
 from ..config import get_settings
-from ..db import User
-from ..db.session import get_session
+from ..db import TelegramPairingCode, User
+from ..db.session import engine, get_session
 
 router = APIRouter()
 
-# In-memory pairing store: {code: (user_id, expires_ts)}
-_pairing_codes: dict[str, tuple[int, float]] = {}
 _CODE_TTL_SECONDS = 300  # 5 minutes
 
 _bot_username_cache: str | None = None
@@ -55,11 +52,35 @@ def _generate_code() -> str:
     return "".join(secrets.choice(alphabet) for _ in range(6))
 
 
-def _cleanup_expired() -> None:
-    now = time.time()
-    expired = [k for k, (_, exp) in _pairing_codes.items() if exp < now]
-    for k in expired:
-        _pairing_codes.pop(k, None)
+def _cleanup_expired(session: Session) -> None:
+    now = datetime.utcnow()
+    expired = session.exec(
+        select(TelegramPairingCode).where(TelegramPairingCode.expires_at < now)
+    ).all()
+    for row in expired:
+        session.delete(row)
+    if expired:
+        session.commit()
+
+
+def _issue_code(session: Session, user_id: int) -> tuple[str, int]:
+    """Drop any prior codes for this user, create a fresh one, persist."""
+    _cleanup_expired(session)
+    prior = session.exec(
+        select(TelegramPairingCode).where(TelegramPairingCode.user_id == user_id)
+    ).all()
+    for row in prior:
+        session.delete(row)
+    code = _generate_code()
+    session.add(
+        TelegramPairingCode(
+            code=code,
+            user_id=user_id,
+            expires_at=datetime.utcnow() + timedelta(seconds=_CODE_TTL_SECONDS),
+        )
+    )
+    session.commit()
+    return code, _CODE_TTL_SECONDS
 
 
 @router.post("/pair-code")
@@ -70,22 +91,14 @@ def generate_pair_code(
     """Generate a temporary pairing code for linking this user to a Telegram chat."""
     if not get_settings().has_telegram:
         raise HTTPException(400, "Telegram bot not configured (TELEGRAM_BOT_TOKEN missing)")
-
-    _cleanup_expired()
-
-    # Invalidate any existing codes for this user
-    to_remove = [k for k, (uid, _) in _pairing_codes.items() if uid == user.id]
-    for k in to_remove:
-        _pairing_codes.pop(k, None)
-
-    code = _generate_code()
-    _pairing_codes[code] = (user.id, time.time() + _CODE_TTL_SECONDS)
-    return {"code": code, "ttl_seconds": _CODE_TTL_SECONDS}
+    code, ttl = _issue_code(session, user.id)
+    return {"code": code, "ttl_seconds": ttl}
 
 
 @router.post("/invite")
 def generate_invite_link(
     user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict:
     """One-click founder flow: returns a t.me deep-link that pairs on Start tap.
 
@@ -94,20 +107,13 @@ def generate_invite_link(
     """
     if not get_settings().has_telegram:
         raise HTTPException(400, "Telegram bot not configured (TELEGRAM_BOT_TOKEN missing)")
-
-    _cleanup_expired()
-    to_remove = [k for k, (uid, _) in _pairing_codes.items() if uid == user.id]
-    for k in to_remove:
-        _pairing_codes.pop(k, None)
-
-    code = _generate_code()
-    _pairing_codes[code] = (user.id, time.time() + _CODE_TTL_SECONDS)
+    code, ttl = _issue_code(session, user.id)
     username = _fetch_bot_username()
     return {
         "url": f"https://t.me/{username}?start={code}",
         "bot_username": username,
         "code": code,
-        "ttl_seconds": _CODE_TTL_SECONDS,
+        "ttl_seconds": ttl,
     }
 
 
@@ -137,14 +143,22 @@ def telegram_status(
 def verify_pairing_code(code: str, chat_id: int) -> int | None:
     """Called by the bot to verify a pairing code and link the chat.
 
-    Returns user_id on success, None on failure.
+    Returns user_id on success, None on failure. Uses SQLite so the bot
+    container (a separate process) can see codes issued by api.
     """
-    _cleanup_expired()
     code = code.strip().upper()
-    entry = _pairing_codes.pop(code, None)
-    if not entry:
-        return None
-    user_id, expires = entry
-    if time.time() > expires:
-        return None
-    return user_id
+    with Session(engine) as s:
+        _cleanup_expired(s)
+        row = s.exec(
+            select(TelegramPairingCode).where(TelegramPairingCode.code == code)
+        ).first()
+        if not row:
+            return None
+        if row.expires_at < datetime.utcnow():
+            s.delete(row)
+            s.commit()
+            return None
+        user_id = row.user_id
+        s.delete(row)
+        s.commit()
+        return user_id

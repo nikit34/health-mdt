@@ -206,6 +206,15 @@ class WaitlistSignup(SQLModel, table=True):
     referrer: str = ""
 
 
+class TelegramPairingCode(SQLModel, table=True):
+    """Shared pairing store — api generates, bot consumes. Can't live in memory:
+    api and bot run in separate containers so a process-local dict is invisible
+    across services."""
+    code: str = Field(primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    expires_at: datetime = Field(index=True)
+
+
 class Medication(SQLModel, table=True):
     """Active or past medication the user is taking.
 
