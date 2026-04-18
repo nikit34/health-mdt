@@ -82,25 +82,35 @@ else
 fi
 
 # 4. Build & start
-info "Сборка контейнеров (первый раз займёт 2-4 минуты)…"
-docker compose build --progress=plain 2>&1 | tail -20
+# First-time build: 3-6 мин. api-образ включает Node.js + @anthropic-ai/claude-code
+# (нужен для agents через subscription-путь). Python-deps ставятся через editable install.
+info "Сборка контейнеров (первый раз: 3-6 минут, Node + claude CLI качаются в образ)…"
+docker compose build --progress=plain 2>&1 | tail -25
 
 info "Запуск стека…"
 docker compose up -d
 
 # 5. Wait for health
+# 180s margin — первый старт api подгружает claude-agent-sdk + anthropic + weasyprint,
+# плюс init_db() накатывает additive migrations.
 info "Ожидаю готовности API…"
-for i in {1..60}; do
+for i in {1..90}; do
   if docker compose exec -T api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" >/dev/null 2>&1; then
     ok "API здоров"
     break
   fi
   sleep 2
-  if [[ $i -eq 60 ]]; then
-    err "API не стартовал за 120 секунд. Логи: docker compose logs api"
+  if [[ $i -eq 90 ]]; then
+    err "API не стартовал за 180 секунд. Логи: docker compose logs api"
     exit 1
   fi
 done
+
+# 5a. Detect which LLM path is active, for user-friendly output below.
+LLM_MODE=$(docker compose exec -T api python -c "
+from src.config import get_settings
+print(get_settings().llm_auth_mode)
+" 2>/dev/null | tr -d '\r\n' || echo "none")
 
 # 6. Print access info
 if [[ "$DOMAIN" == "localhost" ]]; then
@@ -120,6 +130,14 @@ else
   QR_ASCII="(установи qrencode локально для ASCII QR: brew install qrencode)"
 fi
 
+# Human-readable LLM path description for the output banner
+case "$LLM_MODE" in
+  setup_token) LLM_LABEL="✓ Claude Pro/Max subscription (через CLI в api-контейнере)";;
+  api_key)     LLM_LABEL="✓ Anthropic API key (pay-per-use, prompt caching)";;
+  none)        LLM_LABEL="⚠ LLM не настроен — добавь CLAUDE_CODE_OAUTH_TOKEN или ANTHROPIC_API_KEY в .env";;
+  *)           LLM_LABEL="$LLM_MODE";;
+esac
+
 cat <<EOF
 
 ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}
@@ -128,6 +146,7 @@ ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━
 
   URL:    $URL
   PIN:    $PIN
+  LLM:    $LLM_LABEL
   Bot:    отправь /start боту (если токен настроен)
 
   Мобильный QR (отсканируй — попадёшь сразу в дашборд):
