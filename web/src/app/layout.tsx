@@ -4,8 +4,13 @@ import { Navbar } from "@/components/Navbar";
 import { SessionIntake } from "@/components/SessionIntake";
 
 export const metadata: Metadata = {
-  title: "health-mdt",
-  description: "Персональный мультиагентный health-ассистент",
+  title: {
+    default: "health-mdt · cardiometabolic MDT",
+    template: "%s · health-mdt",
+  },
+  description: "Персональный мультиагентный health-ассистент — 9 специалистов и GP под одной крышей.",
+  // Next.js auto-picks /app/icon.svg for favicon + standard <link> tags
+  themeColor: "#0a0a0b",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
