@@ -78,11 +78,14 @@ def logout(token: str = Header(default="", alias="X-Session")) -> dict:
 @router.get("/mode")
 def auth_mode() -> dict:
     s = get_settings()
-    return {
+    out: dict = {
         "mode": "oauth" if s.has_oauth else "pin",
         "providers": ["google"] if s.has_oauth else [],
         "pin_required": bool(s.access_pin.strip()) if not s.has_oauth else False,
     }
+    if not s.has_oauth and s.auto_fill_pin and s.access_pin.strip():
+        out["pin"] = s.access_pin.strip()
+    return out
 
 
 # --- OAuth mode ---

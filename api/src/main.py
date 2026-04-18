@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_settings
 from .db import init_db
-from .routes import auth, data, documents, medications, reports, tasks, sources, chat, meta, push, telegram, public
+from .routes import auth, data, documents, medications, reports, tasks, sources, chat, meta, push, telegram, public, withings
 from .scheduler.jobs import start_scheduler, shutdown_scheduler
 
 
@@ -63,6 +63,7 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(data.router, prefix="/data", tags=["data"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(sources.router, prefix="/sources", tags=["sources"])
+app.include_router(withings.router, prefix="/sources/withings", tags=["withings"])
 app.include_router(reports.router, prefix="/reports", tags=["reports"])
 app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 app.include_router(medications.router, prefix="/medications", tags=["medications"])

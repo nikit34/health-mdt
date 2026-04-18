@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, setSession } from "@/lib/api";
+import { PublicHeader } from "@/components/PrimaryCTA";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"pin" | "oauth" | "loading">("loading");
@@ -10,17 +11,20 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // PIN auto-login from URL hash
     const hash = window.location.hash;
     const match = hash.match(/pin=([0-9]+)/);
     if (match) {
       setPin(match[1]);
-      submit(match[1]).catch(() => {});
-      return;
+    } else {
+      const cached = window.localStorage.getItem("hmdt_last_pin") || "";
+      if (cached) setPin(cached);
     }
     fetch("/api/auth/mode")
       .then((r) => r.json())
-      .then((r) => setMode(r.mode === "oauth" ? "oauth" : "pin"))
+      .then((r) => {
+        setMode(r.mode === "oauth" ? "oauth" : "pin");
+        if (r.pin && !match) setPin(r.pin);
+      })
       .catch(() => setMode("pin"));
   }, []);
 
@@ -30,8 +34,8 @@ export default function LoginPage() {
     try {
       const res = await api.login(value);
       setSession(res.token);
-      const status = await api.status();
-      window.location.href = status.user_onboarded ? "/" : "/onboarding";
+      window.localStorage.setItem("hmdt_last_pin", value);
+      window.location.href = "/onboarding";
     } catch (e: any) {
       setErr("Неверный PIN");
     } finally {
@@ -40,11 +44,18 @@ export default function LoginPage() {
   }
 
   if (mode === "loading") {
-    return <div className="skeleton mx-auto mt-24 h-64 w-80" />;
+    return (
+      <div className="-mx-4 -mt-4 md:-mx-6">
+        <PublicHeader />
+        <div className="skeleton mx-auto mt-24 h-64 w-80" />
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto mt-12 max-w-sm">
+    <div className="-mx-4 -mt-4 md:-mx-6">
+      <PublicHeader />
+      <div className="mx-auto mt-12 max-w-sm px-4">
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft">
           <span className="h-3 w-3 rounded-full bg-accent" />
@@ -94,6 +105,7 @@ export default function LoginPage() {
           ? "Allowlist email-ов настраивается через OAUTH_ALLOWED_EMAILS в .env."
           : "Забыл PIN? Смотри в data/access.pin или перегенерируй перезапуском стека."}
       </p>
+      </div>
     </div>
   );
 }

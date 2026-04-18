@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Access control
     domain: str = "localhost"
     access_pin: str = ""
+    # When true, /auth/mode returns the PIN so the frontend can auto-fill the
+    # login input. Convenience for single-user self-hosted instances; leaks the
+    # PIN to anyone who can reach the endpoint, so keep off on public deploys.
+    auto_fill_pin: bool = False
     # "pin" (single-user) | "oauth" (multi-user via OAuth provider).
     auth_mode: str = "pin"
     # Secret used to sign session cookies in oauth mode; auto-generated on first start if empty.
@@ -34,7 +38,10 @@ class Settings(BaseSettings):
     oauth_allowed_emails: str = ""
 
     # Data sources
-    oura_personal_access_token: str = ""
+    # Withings — OAuth2 app credentials (register at developer.withings.com).
+    # Per-user access/refresh tokens live on the User model.
+    withings_client_id: str = ""
+    withings_client_secret: str = ""
 
     # Evidence
     semantic_scholar_api_key: str = ""
@@ -90,8 +97,8 @@ class Settings(BaseSettings):
         return bool(self.vapid_private_key) and bool(self.vapid_public_key)
 
     @property
-    def has_oura(self) -> bool:
-        return bool(self.oura_personal_access_token)
+    def has_withings(self) -> bool:
+        return bool(self.withings_client_id) and bool(self.withings_client_secret)
 
     @property
     def has_telegram(self) -> bool:

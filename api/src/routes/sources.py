@@ -1,31 +1,22 @@
-"""Manual triggers for data sources — Oura sync, Apple Health import."""
+"""Manual triggers for data sources — Apple Health XML import.
+
+Withings lives in its own router at /sources/withings (OAuth-heavy).
+"""
 from __future__ import annotations
 
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
 from sqlmodel import Session
 
 from ..auth_deps import get_current_user
 from ..config import get_settings
 from ..db import User
-from ..db.session import engine, get_session
+from ..db.session import engine
 from ..integrations.apple_health import import_apple_health_xml
-from ..integrations.oura import fetch_oura_daily
 
 router = APIRouter()
-
-
-@router.post("/oura/sync")
-def oura_sync(
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> dict:
-    s = get_settings()
-    if not s.has_oura:
-        raise HTTPException(400, "OURA_PERSONAL_ACCESS_TOKEN not configured")
-    return fetch_oura_daily(session, user)
 
 
 @router.post("/apple-health/import")

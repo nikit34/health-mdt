@@ -1,7 +1,7 @@
 # health-mdt
 
 > Мультиагентный персональный health-ассистент. Разворачивается за 2 минуты,
-> работает с Oura, Apple Health, медицинскими документами и чек-инами.
+> работает с Apple Watch (Health), Withings, медицинскими документами и чек-инами.
 > Команда из 9 LLM-специалистов + 4 lifestyle-коуча под координацией GP-агента
 > синтезирует ежедневные брифы, еженедельные MDT-отчёты с доказательной базой
 > (PubMed + Semantic Scholar) и задачи с полным жизненным циклом.
@@ -21,7 +21,8 @@
   safety net, план с action/monitor/review.
 - **Доказательная база**: PubMed API + Semantic Scholar (параллельно) — каждый MDT-отчёт
   содержит ссылки с обоснованиями.
-- **Данные**: Oura (API), Apple Health (XML-импорт), медицинские документы (PDF/фото →
+- **Данные**: Apple Health (XML-импорт + Apple Watch), Withings OAuth (вес, АД,
+  body comp, pulse wave velocity, сон), медицинские документы (PDF/фото →
   Claude vision → структурированные лабы с валидностью).
 - **Выходы**: утренний бриф (4-7 предложений, 06:30), еженедельный GP-отчёт (воскресенье),
   задачи с экспортом в Apple Reminders, **PDF-отчёт «для врача»**.
@@ -59,7 +60,7 @@ cloudflared tunnel --url http://localhost
 ## Посмотреть продукт за 3 минуты (локальное демо)
 
 Нулевой UX-friction: одна команда → браузер открывается на жилом дашборде.
-Никаких API-ключей, Oura-кольца, Apple Health экспортов и онбординга.
+Никаких API-ключей, хардварных гаджетов, Apple Health экспортов и онбординга.
 
 ```bash
 git clone https://github.com/nikit34/health-mdt.git
@@ -161,7 +162,7 @@ Lifestyle    MDT specialists
 | GP methodology (SOAP + safety net + problem list + watchful waiting) | ✅ | По RCGP |
 | Evidence: PubMed + Semantic Scholar | ✅ | Параллельный fetch, кэш 14 дней |
 | Lab validity windows | ✅ | Старые анализы ≠ текущее состояние |
-| Oura integration | ✅ | Sleep, HRV, readiness, activity, stress |
+| Withings OAuth integration | ✅ | Вес, АД, body fat, pulse wave velocity, сон, активность |
 | Apple Health XML import | ✅ | Streaming parser (сотни МБ — без проблем) |
 | Medical docs extraction | ✅ | Claude vision → структурированные лабы |
 | Daily brief (06:30) | ✅ | 4-7 предложений, автоматически |
@@ -222,7 +223,7 @@ Credentials создаются на [console.cloud.google.com](https://console.c
 
 - Всё хранится **локально** в `./data/health.db` (SQLite). Ни один запрос с медицинскими
   данными не уходит никому, кроме API Anthropic (для агентов), PubMed (для evidence) и
-  Oura (для пулла твоих же данных).
+  Withings (для пулла твоих же данных — веса, АД, body comp).
 - `.env` не коммитится. `data/`, `uploads/` в `.gitignore`.
 - PIN-авторизация (PIN генерируется при деплое, сессии TTL 30 дней).
 
@@ -243,7 +244,7 @@ MIT. См. [LICENSE](LICENSE).
 lifestyle coaches under a GP coordinator agent produce daily briefs, weekly MDT
 reports grounded in PubMed + Semantic Scholar evidence, monthly strategic reviews,
 PDF exports for real-physician visits, and tasks exported to Apple Reminders. Reads
-from Oura, Apple Health XML, medical documents (via Claude vision) and free-text
+from Apple Health XML, Withings (OAuth — BP, weight, body comp), medical documents (via Claude vision) and free-text
 check-ins. Single-user (PIN) or multi-user (Google OAuth).
 
 Deploy in 2 minutes on any host with Docker:

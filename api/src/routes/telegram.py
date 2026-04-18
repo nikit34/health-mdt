@@ -13,6 +13,7 @@ import secrets
 import time
 from datetime import datetime
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -26,6 +27,26 @@ router = APIRouter()
 # In-memory pairing store: {code: (user_id, expires_ts)}
 _pairing_codes: dict[str, tuple[int, float]] = {}
 _CODE_TTL_SECONDS = 300  # 5 minutes
+
+_bot_username_cache: str | None = None
+
+
+def _fetch_bot_username() -> str:
+    """Cached getMe — avoids hitting Telegram API on every invite-link request."""
+    global _bot_username_cache
+    if _bot_username_cache:
+        return _bot_username_cache
+    token = get_settings().telegram_bot_token.strip()
+    if not token:
+        raise HTTPException(400, "Telegram bot not configured (TELEGRAM_BOT_TOKEN missing)")
+    r = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    if not data.get("ok"):
+        raise HTTPException(502, f"telegram getMe failed: {data}")
+    username = data["result"]["username"]
+    _bot_username_cache = username
+    return username
 
 
 def _generate_code() -> str:
@@ -60,6 +81,34 @@ def generate_pair_code(
     code = _generate_code()
     _pairing_codes[code] = (user.id, time.time() + _CODE_TTL_SECONDS)
     return {"code": code, "ttl_seconds": _CODE_TTL_SECONDS}
+
+
+@router.post("/invite")
+def generate_invite_link(
+    user: User = Depends(get_current_user),
+) -> dict:
+    """One-click founder flow: returns a t.me deep-link that pairs on Start tap.
+
+    The payload is a fresh pair code; the bot's /start handler verifies it and
+    links the chat to `user` without any manual code entry.
+    """
+    if not get_settings().has_telegram:
+        raise HTTPException(400, "Telegram bot not configured (TELEGRAM_BOT_TOKEN missing)")
+
+    _cleanup_expired()
+    to_remove = [k for k, (uid, _) in _pairing_codes.items() if uid == user.id]
+    for k in to_remove:
+        _pairing_codes.pop(k, None)
+
+    code = _generate_code()
+    _pairing_codes[code] = (user.id, time.time() + _CODE_TTL_SECONDS)
+    username = _fetch_bot_username()
+    return {
+        "url": f"https://t.me/{username}?start={code}",
+        "bot_username": username,
+        "code": code,
+        "ttl_seconds": _CODE_TTL_SECONDS,
+    }
 
 
 @router.delete("/unpair")

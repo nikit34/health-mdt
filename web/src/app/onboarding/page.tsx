@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
-type Step = "welcome" | "profile" | "sources" | "done";
+type Step = "profile" | "sources" | "done";
 
 export default function Onboarding() {
-  const [step, setStep] = useState<Step>("welcome");
+  const [step, setStep] = useState<Step>("profile");
   const [status, setStatus] = useState<any>(null);
   const [form, setForm] = useState({
     name: "",
@@ -16,13 +16,32 @@ export default function Onboarding() {
     weight_kg: "",
     context: "",
   });
-  const [ouraBusy, setOuraBusy] = useState(false);
+  const [withingsBusy, setWithingsBusy] = useState(false);
   const [appleBusy, setAppleBusy] = useState(false);
   const [appleResult, setAppleResult] = useState<string>("");
-  const [ouraResult, setOuraResult] = useState<string>("");
+  const [withingsResult, setWithingsResult] = useState<string>("");
+  const [withingsConnected, setWithingsConnected] = useState(false);
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
+    api.me
+      .get()
+      .then((u) => {
+        if (!u) return;
+        setForm({
+          name: u.name ?? "",
+          birthdate: u.birthdate ?? "",
+          sex: u.sex ?? "",
+          height_cm: u.height_cm != null ? String(u.height_cm) : "",
+          weight_kg: u.weight_kg != null ? String(u.weight_kg) : "",
+          context: u.context ?? "",
+        });
+      })
+      .catch(() => {});
+    api.withings
+      .status()
+      .then((s) => setWithingsConnected(s.connected))
+      .catch(() => {});
   }, []);
 
   async function saveProfile() {
@@ -51,15 +70,15 @@ export default function Onboarding() {
     }
   }
 
-  async function ouraSync() {
-    setOuraBusy(true);
+  async function connectWithings() {
+    setWithingsBusy(true);
     try {
-      const r = await api.sources.ouraSync();
-      setOuraResult(`Синхронизировано: ${r.inserted ?? 0} новых записей.`);
+      const r = await api.withings.connect();
+      // Redirect the browser to Withings consent page
+      window.location.href = r.authorize_url;
     } catch (err: any) {
-      setOuraResult(`Ошибка: ${err.message}`);
-    } finally {
-      setOuraBusy(false);
+      setWithingsResult(`Ошибка: ${err.message}`);
+      setWithingsBusy(false);
     }
   }
 
@@ -67,18 +86,16 @@ export default function Onboarding() {
     <div className="mx-auto mt-8 max-w-xl">
       <Progress step={step} />
 
-      {step === "welcome" && (
+      {step === "profile" && (
         <section className="rounded-xl border border-border bg-bg-card p-6">
-          <h1 className="text-xl font-semibold">Добро пожаловать</h1>
-          <p className="mt-2 text-sm text-fg-muted">
-            Это персональный health-ассистент. Под капотом — команда из 9 агентов-специалистов и
-            семейного врача, которые работают с твоими данными: Oura, Apple Health, результатами
-            анализов, чек-инами.
+          <h1 className="text-xl font-semibold">Пара слов о себе</h1>
+          <p className="mt-1 text-sm text-fg-muted">
+            Чем точнее контекст, тем полезнее суждения. Всё хранится локально в твоей БД.
           </p>
           <ul className="mt-4 space-y-2 text-sm">
             {[
               ["LLM-агенты", status?.capabilities?.llm],
-              ["Oura API", status?.capabilities?.oura],
+              ["Withings API", status?.capabilities?.withings],
               ["Telegram бот", status?.capabilities?.telegram],
             ].map(([label, ok]) => (
               <li key={label as string} className="flex items-center gap-2">
@@ -92,23 +109,6 @@ export default function Onboarding() {
               </li>
             ))}
           </ul>
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => setStep("profile")}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg"
-            >
-              Дальше →
-            </button>
-          </div>
-        </section>
-      )}
-
-      {step === "profile" && (
-        <section className="rounded-xl border border-border bg-bg-card p-6">
-          <h1 className="text-xl font-semibold">Пара слов о себе</h1>
-          <p className="mt-1 text-sm text-fg-muted">
-            Чем точнее контекст, тем полезнее суждения. Всё хранится локально в твоей БД.
-          </p>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Input label="Имя" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <Input
@@ -153,13 +153,7 @@ export default function Onboarding() {
               className="w-full rounded-md border border-border bg-bg-elevated p-3 text-sm outline-none focus:border-accent"
             />
           </label>
-          <div className="mt-6 flex justify-between">
-            <button
-              onClick={() => setStep("welcome")}
-              className="rounded-md border border-border px-4 py-2 text-sm text-fg-muted hover:text-fg"
-            >
-              ← Назад
-            </button>
+          <div className="mt-6 flex justify-end">
             <button
               onClick={saveProfile}
               className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg"
@@ -180,17 +174,21 @@ export default function Onboarding() {
           </div>
 
           <SourceCard
-            title="Oura Ring"
-            enabled={!!status?.capabilities?.oura}
+            title="Withings (весы, BP, body composition)"
+            enabled={!!status?.capabilities?.withings}
             description={
-              status?.capabilities?.oura
-                ? "API-ключ настроен. Нажми синхронизировать, чтобы подтянуть последние 14 дней."
-                : "OURA_PERSONAL_ACCESS_TOKEN не задан в .env. Получи его на cloud.ouraring.com → Personal Access Tokens, добавь в .env, перезапусти стек."
+              !status?.capabilities?.withings
+                ? "Приложение Withings не настроено владельцем инстанса. Для подключения зарегистрируй приложение на developer.withings.com и добавь WITHINGS_CLIENT_ID/SECRET в .env."
+                : withingsConnected
+                ? "Аккаунт подключён. Данные синхронизируются автоматически каждые 6 часов."
+                : "Подключись через OAuth — откроется страница Withings для разрешения. Забираем вес, АД, body fat, pulse wave velocity, сон."
             }
-            actionLabel={ouraBusy ? "Синхронизирую…" : "Синхронизировать"}
-            onAction={ouraSync}
-            disabled={!status?.capabilities?.oura || ouraBusy}
-            result={ouraResult}
+            actionLabel={
+              withingsBusy ? "…" : withingsConnected ? "Подключено ✓" : "Подключить Withings"
+            }
+            onAction={connectWithings}
+            disabled={!status?.capabilities?.withings || withingsBusy || withingsConnected}
+            result={withingsResult}
           />
 
           <div className="rounded-xl border border-border bg-bg-card p-5">
@@ -241,8 +239,8 @@ export default function Onboarding() {
 }
 
 function Progress({ step }: { step: Step }) {
-  const idx = { welcome: 0, profile: 1, sources: 2, done: 3 }[step];
-  const steps = ["Привет", "Профиль", "Данные"];
+  const idx = { profile: 0, sources: 1, done: 2 }[step];
+  const steps = ["Профиль", "Данные"];
   return (
     <div className="mb-6 flex items-center gap-3">
       {steps.map((label, i) => (

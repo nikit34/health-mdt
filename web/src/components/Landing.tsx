@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { PrimaryCTA, PublicHeader } from "./PrimaryCTA";
 
 export function Landing() {
   return (
     <div className="-mx-4 -mt-4 md:-mx-6">
+      <PublicHeader />
       <Hero />
       <SocialProofStrip />
       <HowItWorks />
@@ -37,7 +39,7 @@ function Hero() {
 
         <p className="mt-6 max-w-2xl text-base leading-relaxed text-fg-muted md:text-lg">
           Загрузи анализы (липиды, HbA1c, CBC) — команда из 9&nbsp;ИИ-специалистов прочитает их вместе с
-          данными Oura/Apple Health и выдаст отчёт: что изменилось, что важно, и 3 конкретных действия на&nbsp;сегодня.
+          данными Apple&nbsp;Watch и Withings (вес, АД, body comp) и выдаст отчёт: что изменилось, что важно, и 3 конкретных действия на&nbsp;сегодня.
           <br />
           <span className="mt-2 inline-block text-fg">
             Первый отчёт — бесплатно. Без регистрации.
@@ -45,15 +47,7 @@ function Hero() {
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/demo"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3.5 text-sm font-semibold text-bg transition hover:bg-accent/90"
-          >
-            Посмотреть пример отчёта
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </Link>
+          <PrimaryCTA size="lg" />
           <a
             href="#how"
             className="inline-flex items-center justify-center rounded-lg border border-border bg-bg-elevated px-6 py-3.5 text-sm font-medium text-fg transition hover:border-fg-muted"
@@ -142,14 +136,14 @@ function HowItWorks() {
           Как это работает
         </h2>
         <p className="mt-3 max-w-2xl text-fg-muted">
-          Три шага. Между ними — клиническая методология, которая обычно сидит в голове у хорошего терапевта.
+          Три шага до отчёта, четвёртый — чтобы он стал привычкой.
         </p>
 
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           <Step
             n={1}
             title="Загрузи свои данные"
-            body="PDF анализов (любая лаборатория), экспорт из Apple Health, токен Oura. Всё опционально — можно даже без них, на одних чек-инах."
+            body="PDF анализов (любая лаборатория), экспорт Apple Health, OAuth с Withings (весы, АД, body comp). Всё опционально — можно даже без них, на одних чек-инах."
             meta="Claude vision читает PDF, извлекает референсы и значения автоматически."
           />
           <Step
@@ -165,6 +159,8 @@ function HowItWorks() {
             meta="SOAP-структура · watchful waiting · evidence из PubMed+Semantic Scholar."
           />
         </div>
+
+        <TelegramHabit />
       </div>
     </section>
   );
@@ -179,6 +175,38 @@ function Step({ n, title, body, meta }: { n: number; title: string; body: string
       <h3 className="mt-4 text-lg font-semibold text-fg">{title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p>
       <p className="mt-4 border-t border-border pt-3 text-xs text-fg-faint">{meta}</p>
+    </div>
+  );
+}
+
+/**
+ * Optional 4th step — Telegram bot. Intentionally quieter than the main 3:
+ * full-width outlined card with dashed border, no accent-circled number.
+ * The signal we want to send: "this is a nice extra, not another hoop".
+ */
+function TelegramHabit() {
+  return (
+    <div className="mt-5 flex flex-col items-start gap-4 rounded-xl border border-dashed border-border bg-bg-card/40 p-5 md:flex-row md:items-center md:gap-6">
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-bg-elevated text-accent">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path d="M21 4L2.5 11.5c-.7.3-.7 1.3 0 1.6l4.5 1.7L18 7l-8 8.5.5 4.5c.2.9 1.4 1 1.9.3l2.3-3.3 4.5 3.3c.7.5 1.7.1 1.9-.7L22 5c.2-.8-.5-1.4-1-1z" />
+        </svg>
+      </div>
+      <div className="flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold text-fg">
+            Каждое утро — бриф в Telegram
+          </h3>
+          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-fg-faint">
+            опционально
+          </span>
+        </div>
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+          Привяжи бота в настройках — 4–7 предложений GP падают в чат в 07:00.
+          В ответ можно писать `/ask`, `/checkin`, закрывать задачи через `/done`.
+          На lock-screen, без открывания приложения.
+        </p>
+      </div>
     </div>
   );
 }
@@ -214,7 +242,7 @@ function Pricing() {
             tagline="Tracker"
             features={[
               "Всё из Free",
-              "Подключение Oura + Apple Health",
+              "Подключение Apple Health + Withings",
               "Lifestyle-апдейт раз в неделю",
               "История трендов 12 месяцев",
             ]}
@@ -302,16 +330,13 @@ function PriceTier({
       </ul>
       <div className="mt-6">
         {ctaHref ? (
-          <Link
-            href={ctaHref}
-            className="block w-full rounded-lg bg-accent py-2.5 text-center text-sm font-semibold text-bg transition hover:bg-accent/90"
-          >
-            {cta}
-          </Link>
+          // Free tier — uses the shared PrimaryCTA so label/destination stay in sync
+          // with the rest of the site (currently → /demo for guests, → / for authed).
+          <PrimaryCTA size="md" className="w-full" showArrow={false} />
         ) : (
           <a
             href={`#waitlist-${tier}`}
-            className="block w-full rounded-lg border border-border bg-bg-elevated py-2.5 text-center text-sm font-medium text-fg transition hover:border-accent"
+            className="block w-full rounded-lg border border-border bg-bg-elevated py-2.5 text-center text-sm font-medium text-fg-muted transition hover:border-accent hover:text-fg"
             onClick={(e) => {
               // Smooth-scroll + prefill tier into the waitlist form
               e.preventDefault();
@@ -386,17 +411,18 @@ function WaitlistSection() {
     <section id="waitlist" className="px-4 py-20 md:px-8">
       <div className="mx-auto max-w-2xl">
         <div className="text-center">
-          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            Хочешь инвайт когда откроем?
+          <h2 className="text-2xl font-semibold tracking-tight text-fg-muted md:text-3xl">
+            Или оставь email — напишем, когда откроем платные планы
           </h2>
-          <p className="mt-3 text-fg-muted">
-            Free-отчёт работает сейчас. Платные планы пилотируем с первыми 50&nbsp;пользователями.
+          <p className="mt-2 text-sm text-fg-faint">
+            Free-отчёт уже работает — просто нажми <span className="text-accent">«Посмотреть демо»</span> выше.
+            Waitlist — для тех, кто хочет больше, чем один отчёт.
           </p>
         </div>
 
         <form
           onSubmit={submit}
-          className="mt-8 space-y-3 rounded-2xl border border-border bg-bg-card p-6"
+          className="mt-8 space-y-3 rounded-2xl border border-border bg-bg-card/60 p-6"
         >
           <div className="flex items-center justify-between text-xs text-fg-muted">
             <span>Email для инвайта</span>
@@ -450,7 +476,7 @@ function WaitlistSection() {
           <button
             type="submit"
             disabled={busy || !email}
-            className="w-full rounded-lg bg-accent py-3 text-sm font-semibold text-bg transition hover:bg-accent/90 disabled:opacity-40"
+            className="w-full rounded-lg border border-border bg-bg-elevated py-2.5 text-sm font-medium text-fg-muted transition hover:border-accent hover:text-fg disabled:opacity-40"
           >
             {busy ? "…" : "Записаться в waitlist"}
           </button>

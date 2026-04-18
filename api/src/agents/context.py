@@ -209,7 +209,7 @@ def build_context(
 
     notes: list[str] = []
     if not metrics_summary:
-        notes.append("Нет метрик за окно — предложи пользователю подключить Oura / загрузить Apple Health.")
+        notes.append("Нет метрик за окно — предложи пользователю подключить Withings (BP/вес) или загрузить Apple Health.")
     if not labs:
         notes.append("Нет лабораторных данных — часть выводов будет ограничена.")
 

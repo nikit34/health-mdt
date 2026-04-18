@@ -2,7 +2,7 @@
 
 Populates everything the UI renders so you can show the product without:
   - An Anthropic API key
-  - A real Oura device
+  - A real Apple Watch or Withings device
   - A real Apple Health export
   - Real medical documents
 
@@ -95,10 +95,15 @@ def seed() -> None:
         _print_summary(s, user)
 
 
-# --- Metrics: 45 days of Oura-style data ---
+# --- Metrics: 45 days of Apple Health + Withings data ---
 
 def _seed_metrics(s: Session, user: User) -> None:
+    """Seed two streams:
+      - Apple Health (HRV, sleep, steps) — 45 days, source='apple_health'
+      - Withings (weight, BP, body comp) — periodic, source='withings'
+    """
     now = datetime.utcnow()
+    # Stream 1 — continuous wearable data (Apple Watch → HealthKit)
     for i in range(45, -1, -1):
         ts = now - timedelta(days=i)
         weekend = ts.weekday() >= 5
@@ -125,9 +130,53 @@ def _seed_metrics(s: Session, user: User) -> None:
         ]
         for kind, val, unit in kinds:
             s.add(Metric(
-                user_id=user.id, ts=ts, source="oura", kind=kind,
+                user_id=user.id, ts=ts, source="apple_health", kind=kind,
                 value=float(val), unit=unit, meta={"seeded": True},
             ))
+
+    # Stream 2 — Withings measurements. Scale every 2-3 days, BP every 3-4 days.
+    # Systolic creeps up 122 → 128 over 45d to produce a cardiology talking point.
+    base_weight = 78.2
+    for i in range(45, -1, -3):
+        ts = now - timedelta(days=i, hours=random.randint(6, 9))
+        # weight jitters ±1.5kg, mild downward trend
+        weight = base_weight - (45 - i) * 0.01 + random.gauss(0, 0.6)
+        body_fat = 19.5 + random.gauss(0, 0.6) - (45 - i) * 0.02
+        muscle = 61.0 + random.gauss(0, 0.4)
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="weight", value=round(weight, 2), unit="kg",
+                     meta={"seeded": True, "device": "Withings Body Cardio"}))
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="body_fat_pct", value=round(body_fat, 1), unit="percent",
+                     meta={"seeded": True}))
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="muscle_mass", value=round(muscle, 1), unit="kg",
+                     meta={"seeded": True}))
+
+    # BP trend — every 3-4 days, rising systolic (122 → 128)
+    for idx, i in enumerate(range(45, -1, -4)):
+        trend_pct = idx / 12  # 0 → 1 over the window
+        systolic = 122 + 6 * trend_pct + random.gauss(0, 3)
+        diastolic = 78 + 2 * trend_pct + random.gauss(0, 2)
+        pulse = 62 + random.gauss(0, 3)
+        ts = now - timedelta(days=i, hours=19)  # evening BP
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="bp_systolic", value=round(systolic, 1), unit="mmHg",
+                     meta={"seeded": True, "device": "Withings BPM Connect"}))
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="bp_diastolic", value=round(diastolic, 1), unit="mmHg",
+                     meta={"seeded": True}))
+        s.add(Metric(user_id=user.id, ts=ts, source="withings",
+                     kind="pulse_during_bp", value=round(pulse, 1), unit="bpm",
+                     meta={"seeded": True}))
+
+    # Pulse Wave Velocity — once a month (Body Cardio does it with each weigh-in but
+    # the signal is slow). Single recent value.
+    s.add(Metric(
+        user_id=user.id, ts=now - timedelta(days=7), source="withings",
+        kind="pulse_wave_velocity", value=8.2, unit="m_per_s",
+        meta={"seeded": True, "note": "arterial stiffness — in normal range (<10)"},
+    ))
 
 
 # --- Labs: 3 draws over last year → show trends ---

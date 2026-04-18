@@ -40,7 +40,7 @@
 
           ┌──────────────────────┐         ┌─────────────────────────────┐
           │   Data ingest        │         │   Evidence                  │
-          │  • Oura API          │         │  • PubMed E-utils           │
+          │  • Withings OAuth    │         │  • PubMed E-utils           │
           │  • Apple Health XML  │         │  • Semantic Scholar API     │
           │  • Documents (vision)│         │  (parallel, cache 14d)      │
           │  • User check-ins    │         └─────────────────────────────┘
@@ -50,7 +50,7 @@
 ## Слои
 
 ### 1. Ingestion
-- **Oura**: поллинг v2 API, идемпотентный upsert в `metric`.
+- **Withings**: OAuth2 per-user, поллинг measure + sleep + activity endpoints, идемпотентный upsert в `metric`. Refresh token ротируется — сохраняем новый после каждого refresh.
 - **Apple Health**: стримовый XML парсер (`lxml.iterparse`), чтобы файлы 200+ MB не
   требовали 2 GB RAM.
 - **Документы**: Claude vision извлекает лабораторные панели в структуру (`document.extracted`)

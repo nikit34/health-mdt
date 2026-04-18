@@ -19,12 +19,65 @@ export default function SettingsPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState("");
 
+  // Withings
+  const [withings, setWithings] = useState<{
+    app_configured: boolean;
+    connected: boolean;
+    expires_at: string | null;
+    last_sync_at: string | null;
+  } | null>(null);
+  const [withingsBusy, setWithingsBusy] = useState(false);
+  const [withingsMsg, setWithingsMsg] = useState("");
+
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
     api.me.get().then(setMe).catch(() => {});
     api.telegram.status().then(setTgStatus).catch(() => {});
     api.push.status().then(setPushStatus).catch(() => {});
+    api.withings.status().then(setWithings).catch(() => {});
+
+    // Surface the OAuth callback outcome from query params
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("withings_connected") === "1") {
+        setWithingsMsg("✓ Withings подключён. Начинаю синхронизацию.");
+      } else if (url.searchParams.get("withings_error")) {
+        setWithingsMsg(`Ошибка OAuth: ${url.searchParams.get("withings_error")}`);
+      }
+    }
   }, []);
+
+  async function connectWithings() {
+    setWithingsBusy(true);
+    try {
+      const r = await api.withings.connect();
+      window.location.href = r.authorize_url;
+    } catch (e: any) {
+      setWithingsMsg("Ошибка: " + e.message);
+      setWithingsBusy(false);
+    }
+  }
+
+  async function syncWithings() {
+    setWithingsBusy(true);
+    try {
+      const r = await api.withings.sync();
+      setWithingsMsg(`Синхронизировано: ${r.inserted ?? 0} новых записей.`);
+      const s = await api.withings.status();
+      setWithings(s);
+    } catch (e: any) {
+      setWithingsMsg("Ошибка: " + e.message);
+    } finally {
+      setWithingsBusy(false);
+    }
+  }
+
+  async function disconnectWithings() {
+    if (!confirm("Отключить Withings и стереть токены?")) return;
+    await api.withings.disconnect();
+    setWithings({ ...withings!, connected: false });
+    setWithingsMsg("Отключено.");
+  }
 
   async function save() {
     setSaving(true);
@@ -47,11 +100,31 @@ export default function SettingsPage() {
   }
 
   // Telegram pairing
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
   async function generatePairCode() {
     setPairBusy(true);
     try {
       const r = await api.telegram.pairCode();
       setPairCode(r.code);
+    } catch (e: any) {
+      alert("Ошибка: " + e.message);
+    } finally {
+      setPairBusy(false);
+    }
+  }
+
+  async function generateInvite() {
+    setPairBusy(true);
+    setInviteCopied(false);
+    try {
+      const r = await api.telegram.invite();
+      setInviteUrl(r.url);
+      try {
+        await navigator.clipboard.writeText(r.url);
+        setInviteCopied(true);
+      } catch {}
     } catch (e: any) {
       alert("Ошибка: " + e.message);
     } finally {
@@ -137,6 +210,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Telegram Pairing */}
+      <div id="telegram" className="scroll-mt-20" />
       <Card title="Telegram">
         {!tgStatus ? (
           <div className="skeleton h-12" />
@@ -153,28 +227,117 @@ export default function SettingsPage() {
             <Button variant="danger" onClick={unpairTelegram}>Отвязать</Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-fg-muted">
-              Привяжи Telegram-бот к своему аккаунту:
-            </p>
-            {pairCode ? (
-              <div className="flex items-center gap-4">
-                <div className="rounded-lg border border-accent/40 bg-accent/10 px-5 py-3">
-                  <span className="text-2xl font-bold tracking-[0.3em] text-accent">{pairCode}</span>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-fg-muted">
+                Одна ссылка — фаундер открывает в Telegram, жмёт «Start», чат привязан.
+                Код действует 5 минут.
+              </p>
+              {inviteUrl ? (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs">
+                      {inviteUrl}
+                    </code>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(inviteUrl);
+                          setInviteCopied(true);
+                        } catch {}
+                      }}
+                    >
+                      {inviteCopied ? "Скопировано ✓" : "Скопировать"}
+                    </Button>
+                    <a
+                      href={inviteUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:bg-accent/90"
+                    >
+                      Открыть
+                    </a>
+                  </div>
                 </div>
-                <div className="text-sm text-fg-muted">
-                  <p>Отправь боту:</p>
-                  <code className="mt-1 block rounded bg-bg-elevated px-2 py-1 text-xs">/pair {pairCode}</code>
-                  <p className="mt-1 text-xs text-fg-faint">Код действует 5 минут</p>
+              ) : (
+                <Button className="mt-2" onClick={generateInvite} disabled={pairBusy}>
+                  {pairBusy ? "…" : "Сгенерировать invite-ссылку"}
+                </Button>
+              )}
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-sm text-fg-muted">
+                Или — ручной путь через код:
+              </p>
+              {pairCode ? (
+                <div className="mt-2 flex items-center gap-4">
+                  <div className="rounded-lg border border-accent/40 bg-accent/10 px-5 py-3">
+                    <span className="text-2xl font-bold tracking-[0.3em] text-accent">{pairCode}</span>
+                  </div>
+                  <div className="text-sm text-fg-muted">
+                    <p>Отправь боту:</p>
+                    <code className="mt-1 block rounded bg-bg-elevated px-2 py-1 text-xs">/pair {pairCode}</code>
+                    <p className="mt-1 text-xs text-fg-faint">Код действует 5 минут</p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <Button onClick={generatePairCode} disabled={pairBusy}>
-                {pairBusy ? "Генерирую…" : "Получить код привязки"}
-              </Button>
-            )}
+              ) : (
+                <Button className="mt-2" variant="ghost" onClick={generatePairCode} disabled={pairBusy}>
+                  {pairBusy ? "…" : "Получить код привязки"}
+                </Button>
+              )}
+            </div>
           </div>
         )}
+      </Card>
+
+      {/* Withings */}
+      <div id="withings" className="scroll-mt-20" />
+      <Card title="Withings (весы, BP, body composition)">
+        {!withings ? (
+          <div className="skeleton h-12" />
+        ) : !withings.app_configured ? (
+          <p className="text-sm text-fg-muted">
+            Приложение Withings не настроено. Владелец инстанса: зарегистрируй Public Cloud app на{" "}
+            <a href="https://developer.withings.com" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              developer.withings.com
+            </a>
+            , добавь WITHINGS_CLIENT_ID и WITHINGS_CLIENT_SECRET в .env, перезапусти стек.
+          </p>
+        ) : withings.connected ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Pill tone="ok">подключено</Pill>
+              {withings.last_sync_at && (
+                <span className="text-xs text-fg-muted">
+                  последний sync: {new Date(withings.last_sync_at).toLocaleString("ru-RU")}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-fg-muted">
+              Данные синхронизируются автоматически раз в 6 часов и перед утренним брифом.
+              Тянем: вес, body fat, muscle mass, АД (systolic/diastolic), pulse wave velocity,
+              SpO2, сон, активность.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={syncWithings} disabled={withingsBusy}>
+                {withingsBusy ? "Синхронизирую…" : "Синхронизировать сейчас"}
+              </Button>
+              <Button variant="danger" onClick={disconnectWithings}>Отключить</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-fg-muted">
+              Подключи аккаунт Withings через OAuth — откроется страница Withings для
+              разрешения. Закроет ключевую дыру кардиолога (АД) и эндокринолога (body comp).
+            </p>
+            <Button onClick={connectWithings} disabled={withingsBusy}>
+              {withingsBusy ? "…" : "Подключить Withings"}
+            </Button>
+          </div>
+        )}
+        {withingsMsg && <div className="mt-3 text-sm text-fg-muted">{withingsMsg}</div>}
       </Card>
 
       {/* Notifications */}
@@ -248,7 +411,7 @@ export default function SettingsPage() {
                 : "Задай CLAUDE_CODE_OAUTH_TOKEN или ANTHROPIC_API_KEY в .env"
             }
           />
-          <Integration label="Oura" ok={status?.capabilities?.oura} hint="OURA_PERSONAL_ACCESS_TOKEN в .env" />
+          <Integration label="Withings" ok={status?.capabilities?.withings} hint="WITHINGS_CLIENT_ID/SECRET в .env — остальное через OAuth" />
           <Integration label="Telegram" ok={status?.capabilities?.telegram} hint={
             me.telegram_chat_id ? `Привязан chat_id ${me.telegram_chat_id}` : "Настрой TELEGRAM_BOT_TOKEN и отправь /pair <КОД>"
           } />

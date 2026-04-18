@@ -33,12 +33,19 @@ class User(SQLModel, table=True):
     notification_email: Optional[str] = None  # separate from oauth email if desired
     push_notifications: bool = True  # on by default when subscribed
 
+    # Withings OAuth — per-user tokens, refresh rotates so both must be persistable
+    withings_user_id: Optional[str] = Field(default=None, index=True)
+    withings_access_token: Optional[str] = None
+    withings_refresh_token: Optional[str] = None
+    withings_expires_at: Optional[datetime] = None
+
 
 class Metric(SQLModel, table=True):
-    """Time-series metrics from Oura, Apple Health, manual entry.
+    """Time-series metrics from Apple Health, Withings, manual entry, derived signals.
 
-    `source` ∈ {'oura','apple_health','manual','derived'}.
-    `kind` is the metric identifier (e.g. 'hrv_rmssd', 'resting_hr', 'sleep_duration', 'steps').
+    `source` ∈ {'apple_health','withings','manual','derived'}.
+    `kind` is the metric identifier (e.g. 'hrv_rmssd_night', 'resting_hr',
+    'sleep_duration', 'steps', 'bp_systolic', 'weight', 'body_fat_pct').
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)

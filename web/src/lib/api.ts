@@ -36,7 +36,7 @@ async function request<T>(path: string, init: RequestInit = {}, opts: { publicRo
 export const api = {
   status: () => request<{
     version: string;
-    capabilities: { llm: boolean; oura: boolean; telegram: boolean };
+    capabilities: { llm: boolean; withings: boolean; telegram: boolean };
     user_onboarded: boolean;
     counts: Record<string, number>;
     domain: string;
@@ -137,7 +137,6 @@ export const api = {
   },
 
   sources: {
-    ouraSync: () => request<any>("/sources/oura/sync", { method: "POST" }),
     appleHealthImport: (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
@@ -145,9 +144,23 @@ export const api = {
     },
   },
 
+  withings: {
+    status: () =>
+      request<{
+        app_configured: boolean;
+        connected: boolean;
+        expires_at: string | null;
+        last_sync_at: string | null;
+      }>("/sources/withings/status"),
+    connect: () => request<{ authorize_url: string }>("/sources/withings/connect"),
+    sync: () => request<any>("/sources/withings/sync", { method: "POST" }),
+    disconnect: () => request<{ ok: boolean }>("/sources/withings/disconnect", { method: "DELETE" }),
+  },
+
   telegram: {
     status: () => request<{ paired: boolean; chat_id: number | null; bot_configured: boolean }>("/telegram/status"),
     pairCode: () => request<{ code: string; ttl_seconds: number }>("/telegram/pair-code", { method: "POST" }),
+    invite: () => request<{ url: string; bot_username: string; code: string; ttl_seconds: number }>("/telegram/invite", { method: "POST" }),
     unpair: () => request<{ ok: boolean }>("/telegram/unpair", { method: "DELETE" }),
   },
 

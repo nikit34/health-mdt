@@ -83,10 +83,25 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     args = context.args
     settings = get_settings()
+    payload = args[0].strip() if args else ""
 
-    # If PIN configured, require it
+    # Deep-link pairing-code path: founder clicks t.me/<bot>?start=<CODE>
+    # Telegram delivers it as /start <CODE>; accept before PIN so any valid code wins.
+    if payload:
+        from ..routes.telegram import verify_pairing_code
+        user_id = verify_pairing_code(payload, chat_id)
+        if user_id is not None:
+            with Session(engine) as s:
+                u = s.get(User, user_id)
+                if u is not None:
+                    u.telegram_chat_id = chat_id
+                    s.add(u)
+                    s.commit()
+            await update.message.reply_text(_help_text())
+            return
+
     if settings.access_pin:
-        if not args or args[0].strip() != settings.access_pin.strip():
+        if not payload or payload != settings.access_pin.strip():
             await update.message.reply_text(
                 "Добро пожаловать в health-mdt.\n\n"
                 "Чтобы связать этот чат с твоим аккаунтом, отправь:\n"

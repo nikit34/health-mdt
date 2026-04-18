@@ -23,7 +23,10 @@ CARDIOLOGIST = Agent(
 - **ЧСС покоя** — тренд; рост на 5+ уд/мин на 7+ дней без объяснимой причины → флаг.
 - **Липидный профиль** (валиден 365д): LDL, HDL, triglycerides, non-HDL-C.
   Таргет LDL зависит от риска: <1.4 при очень высоком, <1.8 при высоком, <3.0 при умеренном.
-- **Артериальное давление** — если есть измерения.
+- **Артериальное давление** (Withings BP Monitor): systolic/diastolic тренд.
+  ESC цели: <130/80 при высоком СС-риске, <140/90 общий.
+- **Pulse Wave Velocity** (Withings Body Cardio): артериальная жёсткость, >10 m/s — повышенный СС-риск.
+- **Body composition** (Withings scale): body fat %, muscle mass — тренды.
 - **Фитнес-метрики** — VO2max estimate, recovery HR.
 
 ## Методология
@@ -34,6 +37,8 @@ CARDIOLOGIST = Agent(
 ## Safety flags (пример триггеров)
 - ЧСС покоя > 100 или < 40 без причины;
 - ВСР упала >40% относительно 30-дневной нормы;
+- АД: systolic ≥180 или diastolic ≥110 — гипертонический криз;
+- Pulse Wave Velocity >12 m/s;
 - Новый паттерн аритмии в данных.
 
 ## PubMed запросы
@@ -250,8 +255,8 @@ PULMONOLOGIST = Agent(
 Ты оцениваешь дыхательную систему.
 
 ## Твои фокусы
-- **SpO2** (Apple Watch/Oura если есть): тренд, ночные паттерны — апноэ-сигнал.
-- **Частота дыхания** ночная (Oura/Apple Watch).
+- **SpO2** (Apple Watch если есть): тренд, ночные паттерны — апноэ-сигнал.
+- **Частота дыхания** ночная (Apple Watch / Withings Sleep Mat).
 - **Анамнез курения**: индекс pack-years, если курит/бросил. Post-cessation recovery.
 - **Симптомы из чек-инов**: одышка, кашель, свистящее дыхание, ночные пробуждения.
 - **Спирометрия** если есть (FEV1/FVC, FEV1% predicted).
@@ -282,7 +287,7 @@ SLEEP_AGENT = Agent(
 
 ## Метрики
 - total_sleep, time_in_bed, sleep_efficiency, sleep_latency;
-- стадии: deep, REM, light (из Oura);
+- стадии: deep, REM, light (из Apple Watch / Withings Sleep Mat);
 - consistency — стабильность времени отхода ко сну и подъёма;
 - ночная ЧСС, HRV во сне.
 
@@ -386,7 +391,7 @@ RECOVERY_AGENT = Agent(
 Ты синтезируешь общую готовность и даёшь короткую микро-рекомендацию дня.
 
 ## Метрики
-- Oura readiness score (если есть);
+- combined recovery signal (если есть);
 - combined: sleep score + HRV + RHR + previous-day activity load;
 - subjective energy из чек-инов.
 

@@ -40,7 +40,7 @@ def status(
         "auth_mode": "oauth" if s.has_oauth else "pin",
         "capabilities": {
             "llm": s.has_llm,
-            "oura": s.has_oura,
+            "withings": s.has_withings,
             "telegram": s.has_telegram,
             "oauth": s.has_oauth,
             "smtp": s.has_smtp,

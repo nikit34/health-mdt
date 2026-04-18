@@ -9,13 +9,39 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   const [r, setR] = useState<any>(null);
   const [err, setErr] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
+  // Telegram nudge: show when the bot is configured but this user hasn't paired
+  // their chat. Report pages are a high-intent moment — the user just saw value
+  // from the MDT, so offering automatic delivery to Telegram lands well here.
+  const [tg, setTg] = useState<{ show: boolean; dismissed: boolean }>({
+    show: false,
+    dismissed: false,
+  });
 
   useEffect(() => {
     api.reports
       .mdtGet(Number(params.id))
       .then(setR)
       .catch((e) => setErr(e.message));
+
+    // Dismissal persists in localStorage so we don't nag the same user on every report
+    const dismissed =
+      typeof window !== "undefined" && window.localStorage.getItem("hmdt_tg_nudge_dismissed") === "1";
+    if (dismissed) {
+      setTg({ show: false, dismissed: true });
+      return;
+    }
+    api.telegram
+      .status()
+      .then((s) => setTg({ show: s.bot_configured && !s.paired, dismissed: false }))
+      .catch(() => setTg({ show: false, dismissed: false }));
   }, [params.id]);
+
+  function dismissTg() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("hmdt_tg_nudge_dismissed", "1");
+    }
+    setTg({ show: false, dismissed: true });
+  }
 
   async function downloadPdf() {
     setPdfBusy(true);
@@ -57,6 +83,8 @@ export default function ReportPage({ params }: { params: { id: string } }) {
           {pdfBusy ? "Формирую PDF…" : "PDF для врача"}
         </button>
       </div>
+
+      {tg.show && <TelegramNudge onDismiss={dismissTg} />}
 
       <Card title="Синтез GP">
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-fg">{r.gp_synthesis}</p>
@@ -166,4 +194,41 @@ function ProblemPill({ status }: { status: string }) {
     resolved: "ok",
   };
   return <Pill tone={tones[status] || "muted"}>{status}</Pill>;
+}
+
+function TelegramNudge({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-accent/20 bg-accent-soft/30 px-4 py-3">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="mt-0.5 flex-shrink-0 text-accent"
+        aria-hidden
+      >
+        <path d="M21 4L2.5 11.5c-.7.3-.7 1.3 0 1.6l4.5 1.7L18 7l-8 8.5.5 4.5c.2.9 1.4 1 1.9.3l2.3-3.3 4.5 3.3c.7.5 1.7.1 1.9-.7L22 5c.2-.8-.5-1.4-1-1z" />
+      </svg>
+      <div className="flex-1 text-sm">
+        <span className="text-fg">Получать следующие отчёты прямо в Telegram</span>
+        <span className="text-fg-muted"> — утренний бриф в 07:00, без захода в приложение. </span>
+        <Link
+          href="/settings#telegram"
+          className="font-medium text-accent hover:underline"
+        >
+          Привязать бота →
+        </Link>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-xs text-fg-faint hover:text-fg"
+        title="Больше не показывать"
+        aria-label="Закрыть"
+      >
+        ×
+      </button>
+    </div>
+  );
 }

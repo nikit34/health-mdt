@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { PrimaryCTA, PublicHeader } from "@/components/PrimaryCTA";
 
 type DemoReport = Awaited<ReturnType<typeof api.public.demoReport>>;
 
@@ -35,35 +36,22 @@ export default function DemoPage() {
 
   return (
     <div className="-mx-4 -mt-4 md:-mx-6">
-      <TopBar />
+      <PublicHeader />
+      <DemoContextBar />
       <ReportBody report={report} />
       <CallToAction />
     </div>
   );
 }
 
-/* ───────── Top bar ───────── */
+/* ───────── Context bar: just tells the visitor "this is someone else's report" ───────── */
 
-function TopBar() {
+function DemoContextBar() {
   return (
-    <div className="border-b border-border bg-bg-elevated/60 px-4 py-3 md:px-8">
-      <div className="mx-auto flex max-w-5xl items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-sm font-semibold">
-          <span className="inline-block h-2 w-2 rounded-full bg-accent" />
-          health-mdt
-        </Link>
-        <div className="flex items-center gap-3">
-          <span className="hidden rounded-full border border-accent/30 bg-accent-soft/60 px-3 py-1 text-xs font-medium text-accent md:inline-flex">
-            это пример отчёта
-          </span>
-          <Link
-            href="/#waitlist"
-            className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-bg transition hover:bg-accent/90"
-          >
-            Хочу свой
-          </Link>
-        </div>
-      </div>
+    <div className="border-b border-border bg-accent-soft/30 px-4 py-2 text-center md:px-8">
+      <span className="text-xs font-medium text-accent">
+        это пример отчёта — сделай свой, нажав «Войти в приложение» сверху
+      </span>
     </div>
   );
 }
@@ -393,18 +381,13 @@ function CallToAction() {
         <p className="mt-3 text-fg-muted">
           Загрузи PDF анализов или начни с чек-ина — получишь такой же отчёт, но про себя.
         </p>
-        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center justify-center gap-2">
+          <PrimaryCTA size="lg" />
           <Link
             href="/#waitlist"
-            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-bg transition hover:bg-accent/90"
+            className="mt-1 text-xs text-fg-faint hover:text-fg-muted"
           >
-            Записаться в waitlist
-          </Link>
-          <Link
-            href="/"
-            className="rounded-lg border border-border bg-bg-elevated px-6 py-3 text-sm font-medium text-fg transition hover:border-fg-muted"
-          >
-            Узнать больше о продукте
+            или оставить email для инвайта на платные планы →
           </Link>
         </div>
       </div>

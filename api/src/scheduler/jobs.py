@@ -1,4 +1,4 @@
-"""Scheduled jobs — daily brief, weekly MDT, Oura sync, task follow-up."""
+"""Scheduled jobs — daily brief, weekly MDT, Withings sync, task follow-up."""
 from __future__ import annotations
 
 import logging
@@ -12,7 +12,7 @@ from ..agents.orchestrator import generate_daily_brief, run_mdt_consilium
 from ..config import get_settings
 from ..db import Medication, Task, User
 from ..db.session import engine
-from ..integrations.oura import fetch_oura_daily
+from ..integrations.withings import fetch_withings
 from ..notifications.push import send_push_to_user
 from ..notifications.email import send_email_to_user, format_brief_email, format_mdt_email
 
@@ -23,7 +23,7 @@ def start_scheduler() -> BackgroundScheduler:
     settings = get_settings()
     sched = BackgroundScheduler(timezone=settings.timezone)
 
-    # 06:30 daily — sync Oura, then build brief
+    # 06:30 daily — pull Withings, then build brief
     sched.add_job(_daily_sync_and_brief, CronTrigger(hour=6, minute=30), id="daily_brief", replace_existing=True)
 
     # 08:00 Sunday — weekly MDT
@@ -35,8 +35,8 @@ def start_scheduler() -> BackgroundScheduler:
     # 09:00 every day — task follow-up for stale tasks
     sched.add_job(_task_followup, CronTrigger(hour=9, minute=0), id="task_followup", replace_existing=True)
 
-    # Every 6h — refresh Oura in case user sync missed morning
-    sched.add_job(_oura_only, CronTrigger(minute=0, hour="*/6"), id="oura_refresh", replace_existing=True)
+    # Every 6h — refresh Withings (BP / weight measurements often happen mid-day)
+    sched.add_job(_withings_refresh, CronTrigger(minute=0, hour="*/6"), id="withings_refresh", replace_existing=True)
 
     # Every 15 minutes — fire medication reminders for meds whose reminder_time just passed
     sched.add_job(
@@ -76,11 +76,11 @@ def _daily_sync_and_brief() -> None:
         return
 
     def _job(s, user):
-        if settings.has_oura:
+        if settings.has_withings and user.withings_access_token:
             try:
-                fetch_oura_daily(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
+                fetch_withings(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
             except Exception as e:
-                log.warning("Daily Oura sync failed: %s", e)
+                log.warning("Daily Withings sync failed for user %s: %s", user.id, e)
         brief = generate_daily_brief(s, user)
         log.info("Daily brief created for user %s: id=%s", user.id, brief.id)
 
@@ -178,13 +178,15 @@ def _task_followup() -> None:
             log.info("Flagged %d stale tasks for follow-up", updated)
 
 
-def _oura_only() -> None:
+def _withings_refresh() -> None:
     settings = get_settings()
-    if not settings.has_oura:
+    if not settings.has_withings:
         return
 
     def _job(s, user):
-        fetch_oura_daily(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
+        if not user.withings_access_token:
+            return  # user hasn't connected
+        fetch_withings(s, user, since=(datetime.utcnow() - timedelta(days=2)).date())
 
     _for_each_user(_job)
 
