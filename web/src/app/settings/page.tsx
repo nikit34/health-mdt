@@ -190,7 +190,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <Card title="Профиль" action={<Button onClick={save} disabled={saving}>{saving ? "Сохраняю…" : "Сохранить"}</Button>}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input label="Имя" value={me.name ?? ""} onChange={(v) => setMe({ ...me, name: v })} />
           <Input label="Часовой пояс" value={me.timezone ?? ""} onChange={(v) => setMe({ ...me, timezone: v })} />
           <Input label="Дата рождения" type="date" value={me.birthdate ?? ""} onChange={(v) => setMe({ ...me, birthdate: v })} />
@@ -219,8 +219,8 @@ export default function SettingsPage() {
             Бот не настроен. Задай TELEGRAM_BOT_TOKEN в .env и перезапусти стек.
           </p>
         ) : tgStatus.paired ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Pill tone="ok">привязан</Pill>
               <span className="text-sm text-fg-muted">chat_id: {tgStatus.chat_id}</span>
             </div>
@@ -235,10 +235,10 @@ export default function SettingsPage() {
               </p>
               {inviteUrl ? (
                 <div className="mt-2 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 truncate rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs">
-                      {inviteUrl}
-                    </code>
+                  <code className="block truncate rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs">
+                    {inviteUrl}
+                  </code>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       onClick={async () => {
                         try {
@@ -271,8 +271,8 @@ export default function SettingsPage() {
                 Или — ручной путь через код:
               </p>
               {pairCode ? (
-                <div className="mt-2 flex items-center gap-4">
-                  <div className="rounded-lg border border-accent/40 bg-accent/10 px-5 py-3">
+                <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="self-start rounded-lg border border-accent/40 bg-accent/10 px-5 py-3">
                     <span className="text-2xl font-bold tracking-[0.3em] text-accent">{pairCode}</span>
                   </div>
                   <div className="text-sm text-fg-muted">

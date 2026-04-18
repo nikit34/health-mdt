@@ -109,7 +109,7 @@ export default function Onboarding() {
               </li>
             ))}
           </ul>
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="Имя" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
             <Input
               label="Дата рождения"

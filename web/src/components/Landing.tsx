@@ -23,49 +23,52 @@ export function Landing() {
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-accent-soft/40 to-bg px-4 pb-20 pt-12 md:px-8 md:pt-20">
-      <div className="mx-auto max-w-5xl">
-        <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-soft/60 px-3 py-1 text-xs font-medium text-accent">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          Cardiometabolic MDT · in private beta
+    <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-accent-soft/40 to-bg px-4 pb-16 pt-10 md:px-8 md:pb-20 md:pt-20">
+      <div className="mx-auto flex max-w-5xl flex-col gap-10 xl:max-w-7xl xl:flex-row xl:items-center xl:gap-12">
+        <div className="min-w-0 flex-1">
+          <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent-soft/60 px-3 py-1 text-xs font-medium text-accent">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            Cardiometabolic MDT · in private beta
+          </div>
+
+          <h1 className="mt-6 text-[2rem] font-semibold leading-[1.1] tracking-tight text-fg sm:text-4xl md:text-5xl xl:text-6xl">
+            Understand your
+            <br />
+            <span className="text-accent">cardiometabolic risk</span> —<br />
+            не когда-нибудь, а сейчас.
+          </h1>
+
+          <p className="mt-6 max-w-2xl text-base leading-relaxed text-fg-muted md:text-lg">
+            Загрузи анализы (липиды, HbA1c, CBC) — команда из 9&nbsp;ИИ-специалистов прочитает их вместе с
+            данными Apple&nbsp;Watch и Withings (вес, АД, body comp) и выдаст отчёт: что изменилось, что важно, и 3 конкретных действия на&nbsp;сегодня.
+            <br />
+            <span className="mt-2 inline-block text-fg">
+              Первый отчёт — бесплатно. Без регистрации.
+            </span>
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <PrimaryCTA size="lg" />
+            <a
+              href="#how"
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-bg-elevated px-6 py-3.5 text-sm font-medium text-fg transition hover:border-fg-muted"
+            >
+              Как это работает
+            </a>
+          </div>
+
+          <p className="mt-6 max-w-2xl text-xs text-fg-faint">
+            Информационный инструмент. Не заменяет врача. Используется как decision-support для осознанного разговора с кардиологом и терапевтом.
+          </p>
         </div>
 
-        <h1 className="mt-6 text-4xl font-semibold leading-[1.1] tracking-tight text-fg md:text-6xl">
-          Understand your
-          <br />
-          <span className="text-accent">cardiometabolic risk</span> —<br />
-          не когда-нибудь, а сейчас.
-        </h1>
-
-        <p className="mt-6 max-w-2xl text-base leading-relaxed text-fg-muted md:text-lg">
-          Загрузи анализы (липиды, HbA1c, CBC) — команда из 9&nbsp;ИИ-специалистов прочитает их вместе с
-          данными Apple&nbsp;Watch и Withings (вес, АД, body comp) и выдаст отчёт: что изменилось, что важно, и 3 конкретных действия на&nbsp;сегодня.
-          <br />
-          <span className="mt-2 inline-block text-fg">
-            Первый отчёт — бесплатно. Без регистрации.
-          </span>
-        </p>
-
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <PrimaryCTA size="lg" />
-          <a
-            href="#how"
-            className="inline-flex items-center justify-center rounded-lg border border-border bg-bg-elevated px-6 py-3.5 text-sm font-medium text-fg transition hover:border-fg-muted"
-          >
-            Как это работает
-          </a>
+        {/* Decorative metric tiles — rendered inline only on xl+ so they can't
+            overlap hero copy on narrower desktops. */}
+        <div className="pointer-events-none hidden flex-shrink-0 gap-3 xl:flex">
+          <MetricTileDeco label="LDL-C" value="3.6" unit="mmol/L" trend="up" delta="+13%" />
+          <MetricTileDeco label="HbA1c" value="5.9" unit="%" trend="up" delta="+0.2" offset={40} />
+          <MetricTileDeco label="HRV" value="48" unit="ms" trend="down" delta="-15%" offset={-20} />
         </div>
-
-        <p className="mt-6 text-xs text-fg-faint">
-          Информационный инструмент. Не заменяет врача. Используется как decision-support для осознанного разговора с кардиологом и терапевтом.
-        </p>
-      </div>
-
-      {/* Decorative metric tiles */}
-      <div className="pointer-events-none absolute -right-24 top-1/2 hidden -translate-y-1/2 gap-3 lg:flex">
-        <MetricTileDeco label="LDL-C" value="3.6" unit="mmol/L" trend="up" delta="+13%" />
-        <MetricTileDeco label="HbA1c" value="5.9" unit="%" trend="up" delta="+0.2" offset={40} />
-        <MetricTileDeco label="HRV" value="48" unit="ms" trend="down" delta="-15%" offset={-20} />
       </div>
     </section>
   );
@@ -222,7 +225,7 @@ function Pricing() {
           Бесплатно — чтобы попробовать. Платно — когда станет ясно, что это инструмент, который ты хочешь рядом долго.
         </p>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-4">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <PriceTier
             tier="free"
             price="Бесплатно"

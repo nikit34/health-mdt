@@ -67,7 +67,7 @@ export default function Home() {
     return (
       <div className="space-y-4">
         <div className="skeleton h-32 w-full" />
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-24" />
           ))}
@@ -130,7 +130,7 @@ export default function Home() {
       </Card>
 
       {/* Metric grid */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard kind="resting_hr" label="RHR" unit="bpm" metrics={metrics} />
         <MetricCard kind="hrv_rmssd_night" label="HRV" unit="ms" metrics={metrics} />
         <MetricCard kind="sleep_duration" label="Сон" unit="ч" metrics={metrics} format={(v) => (v / 3600).toFixed(1)} />

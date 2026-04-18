@@ -98,7 +98,7 @@ export default function MedicationsPage() {
       <Card
         title="Лекарства"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <label className="flex items-center gap-1.5 text-xs text-fg-muted">
               <input
                 type="checkbox"

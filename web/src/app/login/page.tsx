@@ -47,7 +47,7 @@ export default function LoginPage() {
     return (
       <div className="-mx-4 -mt-4 md:-mx-6">
         <PublicHeader />
-        <div className="skeleton mx-auto mt-24 h-64 w-80" />
+        <div className="skeleton mx-auto mt-24 h-64 w-full max-w-xs" />
       </div>
     );
   }

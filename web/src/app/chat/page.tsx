@@ -150,41 +150,49 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-3">
+    <div className="relative flex h-[calc(100vh-8rem)] gap-3">
       {sidebarOpen && (
-        <aside className="w-64 shrink-0 overflow-y-auto rounded-lg border border-border bg-bg-elevated p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-fg-muted">История</span>
-            <button onClick={startNewConversation} className="text-xs text-accent hover:underline">
-              + новый
-            </button>
-          </div>
-          <ul className="space-y-1">
-            {conversations.map((c) => (
-              <li key={c.id}>
-                <div
-                  className={`group flex items-center justify-between rounded px-2 py-1.5 text-sm ${
-                    c.id === conversationId ? "bg-accent/20 text-fg" : "hover:bg-bg text-fg-muted"
-                  }`}
-                >
-                  <button onClick={() => loadConversation(c.id)} className="flex-1 truncate text-left">
-                    {c.title || "Без названия"}
-                  </button>
-                  <button
-                    onClick={() => archiveConversation(c.id)}
-                    className="ml-2 hidden text-xs text-fg-faint hover:text-fg group-hover:inline"
-                    title="Архивировать"
+        <>
+          {/* Mobile backdrop — dim + tap-to-close */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-20 bg-black/40 md:hidden"
+            aria-label="Закрыть историю"
+          />
+          <aside className="fixed inset-y-16 left-4 right-4 z-30 max-w-sm overflow-y-auto rounded-lg border border-border bg-bg-elevated p-3 shadow-2xl md:static md:inset-auto md:w-64 md:shrink-0 md:shadow-none">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs uppercase tracking-wide text-fg-muted">История</span>
+              <button onClick={startNewConversation} className="text-xs text-accent hover:underline">
+                + новый
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {conversations.map((c) => (
+                <li key={c.id}>
+                  <div
+                    className={`group flex items-center justify-between rounded px-2 py-1.5 text-sm ${
+                      c.id === conversationId ? "bg-accent/20 text-fg" : "hover:bg-bg text-fg-muted"
+                    }`}
                   >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
-            {conversations.length === 0 && (
-              <li className="px-2 py-1.5 text-xs text-fg-faint">Пока пусто</li>
-            )}
-          </ul>
-        </aside>
+                    <button onClick={() => loadConversation(c.id)} className="flex-1 truncate text-left">
+                      {c.title || "Без названия"}
+                    </button>
+                    <button
+                      onClick={() => archiveConversation(c.id)}
+                      className="ml-2 text-xs text-fg-faint hover:text-fg md:hidden md:group-hover:inline"
+                      title="Архивировать"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {conversations.length === 0 && (
+                <li className="px-2 py-1.5 text-xs text-fg-faint">Пока пусто</li>
+              )}
+            </ul>
+          </aside>
+        </>
       )}
       <Card title="Спросить GP" className="flex flex-1 flex-col">
         <div className="mb-2 flex items-center justify-between">

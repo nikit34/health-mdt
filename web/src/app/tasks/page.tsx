@@ -42,7 +42,7 @@ export default function TasksPage() {
       <Card
         title="Задачи"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex rounded-md border border-border bg-bg-elevated text-xs">
               {(["open", "done", "all"] as const).map((f) => (
                 <button
@@ -75,11 +75,11 @@ export default function TasksPage() {
               rows={2}
               className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <select
                 value={newTask.priority}
                 onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                className="rounded-md border border-border bg-bg px-2 py-2 text-sm"
+                className="flex-1 min-w-[8rem] rounded-md border border-border bg-bg px-2 py-2 text-sm sm:flex-initial"
               >
                 <option value="urgent">🔴 urgent</option>
                 <option value="normal">🟡 normal</option>
@@ -89,7 +89,7 @@ export default function TasksPage() {
                 type="date"
                 value={newTask.due}
                 onChange={(e) => setNewTask({ ...newTask, due: e.target.value })}
-                className="rounded-md border border-border bg-bg px-3 py-2 text-sm"
+                className="flex-1 min-w-[8rem] rounded-md border border-border bg-bg px-3 py-2 text-sm sm:flex-initial"
               />
               <Button onClick={create}>Создать</Button>
               <Button variant="ghost" onClick={() => setShowNew(false)}>Отмена</Button>
